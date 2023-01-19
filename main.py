@@ -3,6 +3,7 @@ from heatmap import show_map
 from heatmap import withrows
 from heatmap import norows
 from monitortreat import showpath
+from spreading import weedsspread
 import numpy as np
 
 # Press Shift+F10 to execute it or replace it with your code.
@@ -30,7 +31,7 @@ def print_hi(name):
                         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                         [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
     matrix_obstacle = np.zeros((100,100))
-    matrix_obstacle[10:20,35:50] = 2.0
+    matrix_obstacle[10:20,35:50] = np.nan
 
     matrix_square = np.zeros((100,100))
 
@@ -84,9 +85,10 @@ def print_hi(name):
     matrix_nonconvex[34:55,-9] = 2.0
 
     #show_map(matrix_nonconvex)
-    heat_matrix = withrows(matrix_obstacle,2,4)
+    heat_matrix = withrows(matrix_obstacle,2,4,False)
+    spread_matrix = weedsspread(matrix_obstacle,heat_matrix)
     path=[[0,0],[1,0],[2,0],[2,1],[2,2],[2,3],[2,4],[2,5],[2,6],[2,7],[2,8]]
-    showpath(heat_matrix,path)
+    #showpath(spread_matrix,path)
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
