@@ -13,10 +13,10 @@ def show_map(matrix):
     plt.show()
 
 # density: 1 = plant in every row/column, 2= one distance, etc.
-def withrows(matrix,density,rowdist,show=True):
+def withrows(matrix,plantdist,rowdist,show=True):
     heatmatrix=deepcopy(matrix)
     for rows in range(0,100,rowdist):
-        for columns in range(0,100,density):
+        for columns in range(0,100,plantdist):
             if heatmatrix[rows, columns] == 0.0:
                 heatmatrix[rows,columns]=1.0
 

@@ -4,6 +4,7 @@ from heatmap import withrows
 from heatmap import norows
 from monitortreat import showpath
 from spreading import weedsspread
+from spreading import pathogenspread
 import numpy as np
 
 # Press Shift+F10 to execute it or replace it with your code.
@@ -86,7 +87,7 @@ def print_hi(name):
 
     #show_map(matrix_nonconvex)
     heat_matrix = withrows(matrix_obstacle,2,4,False)
-    spread_matrix = weedsspread(matrix_obstacle,heat_matrix)
+    spread_matrix = pathogenspread(matrix_obstacle,heat_matrix)
     path=[[0,0],[1,0],[2,0],[2,1],[2,2],[2,3],[2,4],[2,5],[2,6],[2,7],[2,8]]
     #showpath(spread_matrix,path)
 
