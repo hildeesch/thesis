@@ -68,17 +68,28 @@ class IRrtStar:
     def planning(self):
         theta, dist, x_center, C, x_best = self.init()
         c_best = np.inf
-
+        count_down=3
+        i_best = 0
         for k in range(self.iter_max):
             #time.sleep(0.1)
-
             if self.X_soln:
-                cost = {node: self.Cost(node) for node in self.X_soln}
-                info = {node: self.Info(node) for node in self.X_soln}
+                cost = {node: node.cost for node in self.X_soln}
+                info = {node: node.info for node in self.X_soln}
                 #x_best = min(cost, key=cost.get)
                 x_best = max(info, key=info.get)
                 #c_best = cost[x_best]
+                i_last_best = i_best
                 i_best = info[x_best]
+                if ((i_best-i_last_best)/i_last_best)<0.01: #smaller than 1% improvement
+                    count_down-=1
+                else:
+                    count_down=3 #reset
+            if count_down==0 and k>1000:
+                print("Reached stopping criterion at iteration "+str(k))
+                break # we stop iterating if the best score is not improving much anymore and we already passed at least 1000 cycles
+
+            if k%100==0:
+                print("AGAIN ONE HUNDRED CYCLES FURTHER, CURRENT CYCLE ="+str(k))
 
             x_rand = self.Sample(c_best, dist, x_center, C)
             x_nearest = self.Nearest(self.V, x_rand)
@@ -86,29 +97,38 @@ class IRrtStar:
             #if self.Cost(x_nearest) + self.Line(x_nearest, x_rand) + self.Line(x_rand, self.x_goal) > self.budget:
                 #just for debugging purposes (for now)
                 #print("Past the budget")
-            if self.Cost(x_nearest) + self.Line(x_nearest, x_rand) + self.Line(x_rand, self.x_goal) < self.budget:  # budget check for nearest parent (to make it more efficient)
-                print(self.Cost(x_nearest) + self.Line(x_nearest, x_rand) + self.Line(x_rand, self.x_goal))
-                for x_nearest in self.Near(self.V,x_rand)[:10]:
+            double=False
+            for node in self.V:
+                if node.x == x_new.x and node.y == x_new.y:  # co-located nodes
+                    double=True #there is already a node at this located, so we skip it
+                    # print("double")
+                    break
+            #if x_nearest.cost + self.Line(x_nearest, x_new) + self.Line(x_new, self.x_goal) < self.budget and not double:  # budget check for nearest parent (to make it more efficient)
+            if not double:  # budget check for nearest parent (to make it more efficient)
+                # print(x_nearest.cost + self.Line(x_nearest, x_new) + self.Line(x_new, self.x_goal))
+                for x_near in self.Near(self.V,x_new):
 
-                    if x_new and not self.utils.is_collision(x_nearest, x_new):
-                        X_near = self.Near(self.V, x_new)
-                        c_min = self.Cost(x_nearest) + self.Line(x_nearest, x_new)
+                    if x_new and not self.utils.is_collision(x_near, x_new):
+                        #X_near = self.Near(self.V, x_new)
+                        c_min = x_near.cost + self.Line(x_near, x_new)
                         #print(c_min)
                         #budget = 70
-                        if c_min+self.Line(x_new, self.x_goal) > self.budget:
-                            print("past budget (step 2)")
+                        # if c_min+self.Line(x_new, self.x_goal) > self.budget:
+                        #     print("past budget (step 2): "+str(c_min+self.Line(x_new, self.x_goal)))
                         if c_min+self.Line(x_new, self.x_goal) <self.budget: #extra check for budget for actual parent
                             #if True:
-                            self.V.append(x_new) #generate a "node"/trajectory to each near point
+                            node_new = Node((x_new.x,x_new.y))
+                            node_new.cost = c_min #+self.Line(x_new, self.x_goal)
+                            node_new.parent = x_near #added
+                            node_new.info = self.Info(node_new)
+                            self.V.append(node_new) #generate a "node"/trajectory to each near point
                             # choose parent
                             # for x_near in X_near:
                             #     c_new = self.Cost(x_near) + self.Line(x_near, x_new)
                             #     if c_new < c_min:
                             #         x_new.parent = x_near
                             #         c_min = c_new
-                            x_new.cost = c_min+self.Line(x_new, self.x_goal)
-                            x_new.parent = x_nearest #added
-                            x_new.info = self.Info(x_new)
+
                             #print("append new node x: "+str(x_new.x)+" parent x:"+str(x_new.parent.x))
 
                             #rewire
@@ -118,14 +138,14 @@ class IRrtStar:
                             #     if c_new < c_near:
                             #         x_near.parent = x_new
 
-                            if self.InGoalRegion(x_new):
-                                if not self.utils.is_collision(x_new, self.x_goal):
-                                    self.X_soln.add(x_new)
+                            if self.InGoalRegion(node_new):
+                                if not self.utils.is_collision(node_new, self.x_goal):
+                                    self.X_soln.add(node_new)
                                     # new_cost = self.Cost(x_new) + self.Line(x_new, self.x_goal)
                                     # if new_cost < c_best:
                                     #     c_best = new_cost
                                     #     x_best = x_new
-                self.Pruning(x_new)
+                self.Pruning(node_new)
 
             if k % 20 == 0:
                 self.animation(x_center=x_center, c_best=c_best, dist=dist, theta=theta)
@@ -147,10 +167,13 @@ class IRrtStar:
                 infolist.append(node.info) #to compare the info values
         # now the pruning
         for index, node1 in enumerate(nodelist):
-            for node2 in nodelist:
-                if node2.cost<=node1.cost and node2.info>node1.info:
+            for index2,node2 in enumerate(nodelist):
+                if (node2.cost<=node1.cost and node2.info>node1.info) or (node1.cost==node2.cost and node1.info==node2.info and index!=index2): #prune lesser paths or doubles
+                    # if (node1.cost==node2.cost and node1.info==node2.info and index!=index2):
+                    #     print("Double detected, now pruned")
+                    # else:
+                    #     print("Alternative pruned")
                     # prune the node from all nodes and from our lists
-                    print("node pruned")
                     # self.V.remove(node1)
                     # nodelist.remove(node1)
                     # costlist.remove(node1.cost)
@@ -171,25 +194,31 @@ class IRrtStar:
     def Steer(self, x_start, x_goal):
         dist, theta = self.get_distance_and_angle(x_start, x_goal)
         dist = min(self.step_len, dist)
-        node_new = Node((x_start.x + dist * math.cos(theta),
-                         x_start.y + dist * math.sin(theta)))
-        node_new.parent = x_start
-
+        node_new = Node((int(x_start.x + dist * math.cos(theta)),
+                         int(x_start.y + dist * math.sin(theta))))
+        #node_new.parent = x_start
+        print("x_rand=("+str(x_goal.x)+","+str(x_goal.y)+") - dist = "+str(dist)+" - x_new=("+str(node_new.x)+","+str(node_new.y)+")")
         return node_new
 
     def Near(self, nodelist, node):
         n = len(nodelist) + 1
         r = 50 * math.sqrt((math.log(n) / n))
-
-        dist_table = [(nd.x - node.x) ** 2 + (nd.y - node.y) ** 2 for nd in nodelist]
-        X_near = [nodelist[ind] for ind in range(len(dist_table)) if dist_table[ind] <= r ** 2 and dist_table[ind] > 0.0 and
-                  not self.utils.is_collision(nodelist[ind], node)]
-
+        max_dist = self.step_len
+        #dist_table = [(nd.x - node.x) ** 2 + (nd.y - node.y) ** 2 for nd in nodelist]
+        dist_table = [self.get_distance_and_angle(nd, node)[0] for nd in nodelist]
+        # X_near = [nodelist[ind] for ind in range(len(dist_table)) if dist_table[ind] <= r ** 2 and dist_table[ind] > 0.0 and
+        #           not self.utils.is_collision(nodelist[ind], node)]
+        # X_near = [nodelist[ind] for ind in range(len(dist_table)) if dist_table[ind] <= max_dist and dist_table[ind] > 0.0 and
+        #           not self.utils.is_collision(nodelist[ind], node)]
+        X_near = [nodelist[ind] for ind in range(len(dist_table)) if (dist_table[ind] <= max_dist and dist_table[ind] > 0.0
+                                                                    and not self.utils.is_collision(nodelist[ind], node))]
+        #print("len xnear:"+str(len(X_near)))
         return X_near
 
     def Sample(self, c_max, c_min, x_center, C):
         c_max=np.inf
         if c_max < np.inf:
+            print("not random sampling")
             r = [c_max / 2.0,
                  math.sqrt(c_max ** 2 - c_min ** 2) / 2.0,
                  math.sqrt(c_max ** 2 - c_min ** 2) / 2.0]
@@ -290,7 +319,7 @@ class IRrtStar:
         #     info +=1
         while node.parent:
             #info += math.hypot(node.x - node.parent.x, node.y - node.parent.y)
-            info += self.Info(node.parent)
+            info += node.parent.info
             node = node.parent
         return info
 
@@ -395,7 +424,7 @@ def main(uncertaintymatrix):
     #x_goal = (37, 18)  # Goal node
     x_goal = (19,8)
 
-    rrt_star = IRrtStar(x_start, x_goal, 4*4, 0.1, 12*4, 2000,uncertaintymatrix)
+    rrt_star = IRrtStar(x_start, x_goal, 10, 0.1, 15, 2000,uncertaintymatrix)
     rrt_star.planning()
 
 if __name__ == '__main__':

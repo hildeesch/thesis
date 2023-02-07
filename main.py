@@ -10,7 +10,7 @@ import numpy as np
 from weed import Weed
 from pathogen import Pathogen
 
-from PathPlanning.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread import main as rig
+from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread import main as rig
 
 
 # Press Shift+F10 to execute it or replace it with your code.
