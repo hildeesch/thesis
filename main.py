@@ -11,6 +11,7 @@ from weed import Weed
 from pathogen import Pathogen
 
 from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread import main as rig
+from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread_rows import main as rig_rows
 
 
 # Press Shift+F10 to execute it or replace it with your code.
@@ -73,17 +74,18 @@ def print_hi(name):
     matrix_nonconvex[34:55,-9] = np.nan
 
     #show_map(matrix_nonconvex)
-    heat_matrix = withrows(matrix_convex,2,4,False)
+    heat_matrix = withrows(matrix_square,2,4,False)
 
     pathogen1 = Pathogen(patchnr=5,infectionduration=3,spreadrange=5, spreadspeed=1, reproductionrate=0.2, saturation=3)
-    spread_matrix, uncertainty_matrix = pathogenspread(matrix_convex,heat_matrix,pathogen1, False)
+    spread_matrix, uncertainty_matrix = pathogenspread(matrix_square,heat_matrix,pathogen1, False)
     weed1 = Weed(patchnr=4,patchsize=7,spreadrange=3,spreadspeed=1,saturation=3,plantattach=False)
     #spread_matrix,uncertainty_matrix = weedsspread(matrix_convex,heat_matrix,weed1)
     path=[[0,0],[1,0],[2,0],[2,1],[2,2],[2,3],[2,4],[2,5],[2,6],[2,7],[2,8],[2,9],
     [2,10],[3,10],[4,10],[5,10],[6,11],[6,12],[7,12],[8,13],[9,14],[10,14],[11,15]]
     #showpath(spread_matrix,path)
-
-    rig(uncertainty_matrix)
+    #rig(uncertainty_matrix)
+    rig_rows(uncertainty_matrix)
+    print("sum entropy = "+str(np.nansum(uncertainty_matrix)))
 
 if __name__ == '__main__':
     print_hi('PyCharm')

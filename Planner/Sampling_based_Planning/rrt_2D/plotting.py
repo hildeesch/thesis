@@ -36,15 +36,15 @@ class Plotting:
     def plot_grid(self, name):
         fig, ax = plt.subplots()
 
-        for (ox, oy, w, h) in self.obs_bound:
-            ax.add_patch(
-                patches.Rectangle(
-                    (ox, oy), w, h,
-                    edgecolor='black',
-                    facecolor='black',
-                    fill=True
-                )
-            )
+        # for (ox, oy, w, h) in self.obs_bound:
+        #     ax.add_patch(
+        #         patches.Rectangle(
+        #             (ox, oy), w, h,
+        #             edgecolor='black',
+        #             facecolor='black',
+        #             fill=True
+        #         )
+        #     )
 
         for (ox, oy, w, h) in self.obs_rectangle:
             ax.add_patch(

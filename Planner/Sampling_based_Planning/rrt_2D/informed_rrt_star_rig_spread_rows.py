@@ -26,6 +26,7 @@ class Node:
         self.cost = 0
         self.info = 0
         self.infopath = []
+        self.direction = []
 
 
 class IRrtStar:
@@ -56,6 +57,7 @@ class IRrtStar:
 
         self.budget=250
         self.uncertaintymatrix = uncertaintymatrix
+        self.rowdist=4
 
     def init(self):
         cMin, theta = self.get_distance_and_angle(self.x_start, self.x_goal)
@@ -81,11 +83,12 @@ class IRrtStar:
                 #c_best = cost[x_best]
                 i_last_best = i_best
                 i_best = info[x_best]
-                if ((i_best-i_last_best)/i_last_best)<0.01: #smaller than 1% improvement
-                    count_down-=1
-                else:
-                    count_down=3 #reset
-            if count_down==0 and k>500:
+                if i_last_best>0: # to prevent division by zero
+                    if ((i_best-i_last_best)/i_last_best)<0.01: #smaller than 1% improvement
+                        count_down-=1
+                    else:
+                        count_down=3 #reset
+            if count_down==0 and k>300:
                 print("Reached stopping criterion at iteration "+str(k))
                 break # we stop iterating if the best score is not improving much anymore and we already passed at least ... cycles
 
@@ -110,14 +113,14 @@ class IRrtStar:
                 for x_near in self.Near(self.V,x_new):
 
                     if x_new and not self.utils.is_collision(x_near, x_new):
-                        c_min = x_near.cost + self.Line(x_near, x_new)
+                        c_min = x_near.cost + self.Line(x_near, x_new) #TODO makes no sense with rows
 
                         # if c_min+self.Line(x_new, self.x_goal) > self.budget:
                         #     print("past budget (step 2): "+str(c_min+self.Line(x_new, self.x_goal)))
                         if c_min+self.Line(x_new, self.x_goal) <self.budget: #extra check for budget for actual parent
                             node_new = Node((x_new.x,x_new.y))
-                            node_new.cost = c_min #+self.Line(x_new, self.x_goal)
                             node_new.parent = x_near #added
+                            node_new.cost = self.Cost(node_new) #+self.Line(x_new, self.x_goal)
                             #node_new.info = self.Info(node_new)
                             node_new.info = self.Info_cont(node_new)
                             self.V.append(node_new) #generate a "node"/trajectory to each near point
@@ -144,7 +147,7 @@ class IRrtStar:
                                     # if new_cost < c_best:
                                     #     c_best = new_cost
                                     #     x_best = x_new
-                self.Pruning(node_new)
+                self.Pruning(x_new)
 
             if k % 20 == 0:
                 self.animation(x_center=x_center, c_best=c_best, dist=dist, theta=theta)
@@ -197,7 +200,7 @@ class IRrtStar:
 
     def Near(self, nodelist, node):
         max_dist = self.step_len
-        dist_table = [self.get_distance_and_angle(nd, node)[0] for nd in nodelist]
+        dist_table = [self.get_distance_rows(node,nd) for nd in nodelist]
         X_near = [nodelist[ind] for ind in range(len(dist_table)) if (dist_table[ind] <= max_dist and dist_table[ind] > 0.0
                                                                     and not self.utils.is_collision(nodelist[ind], node))]
         return X_near
@@ -237,7 +240,7 @@ class IRrtStar:
             #return Node((np.random.uniform(self.x_range[0] + delta, self.x_range[1] - delta),
             #             np.random.uniform(self.y_range[0] + delta, self.y_range[1] - delta)))
             return Node((np.random.random_integers(int(self.x_range[0]), int(self.x_range[1])),
-                         np.random.random_integers(int(self.y_range[0]),int(self.y_range[1]))))
+                         ((np.random.random_integers(int(self.y_range[0]),int(self.y_range[1])))//self.rowdist)*self.rowdist))
         return self.x_goal
 
     def ExtractPath(self, node):
@@ -287,11 +290,12 @@ class IRrtStar:
         if node.parent is None:
             return np.inf
 
-        cost = 0.0
+        cost = self.get_distance_rows(node,node.parent)
+
         while node.parent:
             #print("node.x: "+str(node.x)+"node.parent.x: "+str(node.parent.x))
             #print("node.y: "+str(node.y)+"node.parent.y: "+str(node.parent.y))
-            cost += math.hypot(node.x - node.parent.x, node.y - node.parent.y)
+            cost += node.parent.cost
             node = node.parent
 
         return cost
@@ -308,19 +312,120 @@ class IRrtStar:
     def Info_cont(self,node):
         if node.parent is None:
             return 0.0
-        dt = 1/(2*self.step_len)
+        dt = 1/(node.cost-node.parent.cost)
         t=0
         points=node.parent.infopath
+        points_new=[] #TODO fix this so that the order is right immediately
         info=0
-        while t<1.0:
-            xline = node.x-node.parent.x
-            yline = node.y-node.parent.y
-            xpoint = math.floor(node.parent.x+t*xline)
-            ypoint = math.floor(node.parent.y+t*yline)
-            if [xpoint,ypoint] not in points: # only info value when the point is not already monitored before
-                info+=self.uncertaintymatrix[ypoint,xpoint]
-                points.append([xpoint,ypoint])
-            t+=dt
+        done=False
+        while done==False:
+            if node.direction==["left","none"]:
+                for xpoint in range(node.parent.x,node.x-1,-1):
+                    ypoint = node.y
+                    if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
+                        info += self.uncertaintymatrix[ypoint, xpoint]
+                    points_new.append([xpoint, ypoint])
+                done=True
+            if node.direction==["right","none"]:
+                for xpoint in range(node.parent.x,node.x+1):
+                    ypoint = node.y
+                    if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
+                        info += self.uncertaintymatrix[ypoint, xpoint]
+                    points_new.append([xpoint, ypoint])
+                done=True
+            if node.direction==["left","up"]:
+                print("left up!")
+                for xpoint in range(node.x,-1,-1):
+                    ypoint=node.y
+                    if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
+                        info += self.uncertaintymatrix[ypoint, xpoint]
+                    points_new.append([xpoint, ypoint])
+                for ypoint in range(node.y, node.parent.y - 1, -1):
+                    xpoint = 0
+                    if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
+                        info += self.uncertaintymatrix[ypoint, xpoint]
+                    points_new.append([xpoint, ypoint])
+                for xpoint in range(0,node.parent.x+1):
+                    ypoint=node.parent.y
+                    if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
+                        info += self.uncertaintymatrix[ypoint, xpoint]
+                    points_new.append([xpoint, ypoint])
+                done=True
+            if node.direction==["left","down"]:
+                print("left down!")
+                for xpoint in range(node.x,-1,-1):
+                    ypoint=node.y
+                    if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
+                        info += self.uncertaintymatrix[ypoint, xpoint]
+                    points_new.append([xpoint, ypoint])
+                for ypoint in range(node.y,node.parent.y+1):
+                    xpoint =0
+                    if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
+                        info += self.uncertaintymatrix[ypoint, xpoint]
+                    points_new.append([xpoint, ypoint])
+                for xpoint in range(0,node.parent.x+1):
+                    ypoint=node.parent.y
+                    if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
+                        info += self.uncertaintymatrix[ypoint, xpoint]
+                    points_new.append([xpoint, ypoint])
+                done=True
+            if node.direction==["right","up"]:
+                print("right up!")
+                for xpoint in range(node.x,100):
+                    ypoint=node.y
+                    if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
+                        info += self.uncertaintymatrix[ypoint, xpoint]
+                    points_new.append([xpoint, ypoint])
+                for ypoint in range(node.y,node.parent.y-1,-1):
+                    xpoint =99
+                    if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
+                        info += self.uncertaintymatrix[ypoint, xpoint]
+                    points_new.append([xpoint, ypoint])
+                for xpoint in range(99,node.parent.x-1,-1):
+                    ypoint=node.parent.y
+                    if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
+                        info += self.uncertaintymatrix[ypoint, xpoint]
+                    points_new.append([xpoint, ypoint])
+                done=True
+            if node.direction==["right","down"]:
+                print("right down!")
+                for xpoint in range(node.x,100):
+                    ypoint=node.y
+                    if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
+                        info += self.uncertaintymatrix[ypoint, xpoint]
+                    points_new.append([xpoint, ypoint])
+                for ypoint in range(node.y,node.parent.y+1):
+                    xpoint =99
+                    if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
+                        info += self.uncertaintymatrix[ypoint, xpoint]
+                    points_new.append([xpoint, ypoint])
+                for xpoint in range(99,node.parent.x-1,-1):
+                    ypoint=node.parent.y
+                    if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
+                        info += self.uncertaintymatrix[ypoint, xpoint]
+                    points_new.append([xpoint, ypoint])
+                done=True
+            # if node.direction[1]=="up" and done==False:
+            #     for ypoint in range(node.y,node.parent.y-1,-1):
+            #         #xpoint is already given in the if-statements above
+            #         if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
+            #             info += self.uncertaintymatrix[ypoint, xpoint]
+            #         points.append([xpoint, ypoint])
+            #     done=True
+            # if node.direction[1]=="down" and done==False:
+            #     for ypoint in range(node.y,node.parent.y+1):
+            #         #xpoint is already given in the if-statements above
+            #         if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
+            #             info += self.uncertaintymatrix[ypoint, xpoint]
+            #         points.append([xpoint, ypoint])
+            #     done=True
+            if not done:
+                print("something went wrong in the info path")
+        reversedpointsnew=points_new[::-1]
+        if node.direction[1]=="none":
+            reversedpointsnew=reversedpointsnew[::-1]
+        for point in reversedpointsnew:
+            points.append(point)
         node.infopath=points
         while node.parent:
             info += node.parent.info
@@ -332,6 +437,40 @@ class IRrtStar:
         dx = node_end.x - node_start.x
         dy = node_end.y - node_start.y
         return math.hypot(dx, dy), math.atan2(dy, dx)
+    @staticmethod
+    def get_distance_rows(node_start,node_end):
+        #node_start = node
+        #node_end=parent
+        if node_start.y == node_end.y: #in the same row
+            dxright=abs(node_start.x-node_end.x)
+            if node_start.x<node_end.x:
+                direction="right"
+                dx=dxright
+            else:
+                direction="left"
+                dx=dxright #makes no difference for left or right
+            dy=0
+            if node_start.parent:
+                node_start.direction=[direction,"none"]
+        else: # not in same row
+            dxleft=node_start.x+node_end.x
+            dxright=99-node_start.x+99-node_end.x
+            if dxright<=dxleft:
+                direction="right"
+                #print("direction RIGHT")
+                dx=dxright
+            else:
+                #print("direction LEFT")
+                direction="left"
+                dx=dxleft
+            dy=abs(node_end.y-node_start.y)
+            if node_start.y>node_end.y:
+                updown="up"
+            else:
+                updown="down"
+            if node_start.parent:
+                node_start.direction=[direction,updown]
+        return dx+dy
 
     def animation(self, x_center=None, c_best=None, dist=None, theta=None):
         plt.cla()
@@ -342,7 +481,15 @@ class IRrtStar:
 
         for node in self.V:
             if node.parent:
-                plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-g")
+                #reachedparent=False
+                prevpoint=[node.x,node.y]
+                for point in node.infopath[::-1]:
+                    reachedparent= (point[0]==node.parent.x and point[1]==node.parent.y)
+
+                    plt.plot([point[0], prevpoint[0]], [point[1], prevpoint[1]], "-g")
+                    prevpoint=point
+                    if reachedparent:
+                        break
 
         if c_best != np.inf:
             self.draw_ellipse(x_center, c_best, dist, theta)
@@ -421,7 +568,7 @@ def main(uncertaintymatrix):
     #x_goal = (37, 18)  # Goal node
     x_goal = (19,8)
 
-    rrt_star = IRrtStar(x_start, x_goal, 10, 0.0, 15, 2000,uncertaintymatrix)
+    rrt_star = IRrtStar(x_start, x_goal, 50, 0.0, 15, 2000,uncertaintymatrix)
     rrt_star.planning()
 
 if __name__ == '__main__':
