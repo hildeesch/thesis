@@ -15,6 +15,8 @@ import matplotlib.patches as patches
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) +
                 "/../../Sampling_based_Planning/")
 
+from matplotlib import cm
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 #from Sampling_based_Planning.rrt_2D import env, plotting, utils
 from PathPlanning.Sampling_based_Planning.rrt_2D import env, plotting, utils
 
@@ -88,7 +90,7 @@ class IRrtStar:
                         count_down-=1
                     else:
                         count_down=3 #reset
-            if count_down==0 and k>300:
+            if count_down<=0 and k>500:
                 print("Reached stopping criterion at iteration "+str(k))
                 break # we stop iterating if the best score is not improving much anymore and we already passed at least ... cycles
 
@@ -155,8 +157,22 @@ class IRrtStar:
         self.path = self.ExtractPath(x_best)
         self.animation(x_center=x_center, c_best=c_best, dist=dist, theta=theta)
         plt.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
-        plt.plot([x for x, _ in self.path[0:1]],[y for _, y in self.path[0:1]], '-b') # to see whether the path actually ends at the goal
+        plt.plot([x for x, _ in x_best.infopath], [y for _, y in x_best.infopath], '-b')
+        plt.plot([x for x, _ in self.path[-2:]],[y for _, y in self.path[-2:]], '-b') # to see whether the path actually ends at the goal
         plt.pause(0.01)
+        plt.show()
+
+        fig, ax = plt.subplots()
+        colormap = cm.Blues
+        colormap.set_bad(color='black')
+        im = ax.imshow(self.uncertaintymatrix, colormap, vmin=0, vmax=1, origin='lower')
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax)
+        ax.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
+        plt.plot([x for x, _ in x_best.infopath], [y for _, y in x_best.infopath], '-b')
+        ax.set_title("Spatial distribution of uncertainty and final path")
+        fig.tight_layout()
         plt.show()
 
     def Pruning(self, x_new):
@@ -314,9 +330,14 @@ class IRrtStar:
             return 0.0
         dt = 1/(node.cost-node.parent.cost)
         t=0
-        points=node.parent.infopath
+        points=[] # TODO clean up such that this is not a necessary variable anymore
         points_new=[] #TODO fix this so that the order is right immediately
         info=0
+        node.infopath=[]
+        for point in node.parent.infopath:
+            node.infopath.append(point)
+            points.append(point)
+
         done=False
         while done==False:
             if node.direction==["left","none"]:
@@ -334,73 +355,69 @@ class IRrtStar:
                     points_new.append([xpoint, ypoint])
                 done=True
             if node.direction==["left","up"]:
-                print("left up!")
-                for xpoint in range(node.x,-1,-1):
-                    ypoint=node.y
+                for xpoint in range(node.parent.x,-1,-1):
+                    ypoint=node.parent.y
                     if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
                         info += self.uncertaintymatrix[ypoint, xpoint]
                     points_new.append([xpoint, ypoint])
-                for ypoint in range(node.y, node.parent.y - 1, -1):
+                for ypoint in range(node.parent.y, node.y + 1):
                     xpoint = 0
                     if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
                         info += self.uncertaintymatrix[ypoint, xpoint]
                     points_new.append([xpoint, ypoint])
-                for xpoint in range(0,node.parent.x+1):
-                    ypoint=node.parent.y
+                for xpoint in range(0,node.x+1):
+                    ypoint=node.y
                     if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
                         info += self.uncertaintymatrix[ypoint, xpoint]
                     points_new.append([xpoint, ypoint])
                 done=True
             if node.direction==["left","down"]:
-                print("left down!")
-                for xpoint in range(node.x,-1,-1):
-                    ypoint=node.y
+                for xpoint in range(node.parent.x,-1,-1):
+                    ypoint=node.parent.y
                     if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
                         info += self.uncertaintymatrix[ypoint, xpoint]
                     points_new.append([xpoint, ypoint])
-                for ypoint in range(node.y,node.parent.y+1):
+                for ypoint in range(node.parent.y,node.y-1,-1):
                     xpoint =0
                     if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
                         info += self.uncertaintymatrix[ypoint, xpoint]
                     points_new.append([xpoint, ypoint])
-                for xpoint in range(0,node.parent.x+1):
-                    ypoint=node.parent.y
+                for xpoint in range(0,node.x+1):
+                    ypoint=node.y
                     if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
                         info += self.uncertaintymatrix[ypoint, xpoint]
                     points_new.append([xpoint, ypoint])
                 done=True
             if node.direction==["right","up"]:
-                print("right up!")
-                for xpoint in range(node.x,100):
-                    ypoint=node.y
+                for xpoint in range(node.parent.x,100):
+                    ypoint=node.parent.y
                     if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
                         info += self.uncertaintymatrix[ypoint, xpoint]
                     points_new.append([xpoint, ypoint])
-                for ypoint in range(node.y,node.parent.y-1,-1):
+                for ypoint in range(node.parent.y,node.y+1):
                     xpoint =99
                     if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
                         info += self.uncertaintymatrix[ypoint, xpoint]
                     points_new.append([xpoint, ypoint])
-                for xpoint in range(99,node.parent.x-1,-1):
-                    ypoint=node.parent.y
+                for xpoint in range(99,node.x-1,-1):
+                    ypoint=node.y
                     if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
                         info += self.uncertaintymatrix[ypoint, xpoint]
                     points_new.append([xpoint, ypoint])
                 done=True
             if node.direction==["right","down"]:
-                print("right down!")
-                for xpoint in range(node.x,100):
-                    ypoint=node.y
+                for xpoint in range(node.parent.x,100):
+                    ypoint=node.parent.y
                     if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
                         info += self.uncertaintymatrix[ypoint, xpoint]
                     points_new.append([xpoint, ypoint])
-                for ypoint in range(node.y,node.parent.y+1):
+                for ypoint in range(node.parent.y,node.y-1,-1):
                     xpoint =99
                     if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
                         info += self.uncertaintymatrix[ypoint, xpoint]
                     points_new.append([xpoint, ypoint])
-                for xpoint in range(99,node.parent.x-1,-1):
-                    ypoint=node.parent.y
+                for xpoint in range(99,node.x-1,-1):
+                    ypoint=node.y
                     if [xpoint, ypoint] not in points:  # only info value when the point is not already monitored before
                         info += self.uncertaintymatrix[ypoint, xpoint]
                     points_new.append([xpoint, ypoint])
@@ -421,15 +438,12 @@ class IRrtStar:
             #     done=True
             if not done:
                 print("something went wrong in the info path")
-        reversedpointsnew=points_new[::-1]
-        if node.direction[1]=="none":
-            reversedpointsnew=reversedpointsnew[::-1]
-        for point in reversedpointsnew:
-            points.append(point)
-        node.infopath=points
-        while node.parent:
-            info += node.parent.info
-            node = node.parent
+
+        for point in points_new:
+            node.infopath.append(point)
+        #node.infopath=points
+        info+=node.parent.info
+
         return info
 
     @staticmethod
@@ -444,10 +458,10 @@ class IRrtStar:
         if node_start.y == node_end.y: #in the same row
             dxright=abs(node_start.x-node_end.x)
             if node_start.x<node_end.x:
-                direction="right"
+                direction="left"
                 dx=dxright
             else:
-                direction="left"
+                direction="right"
                 dx=dxright #makes no difference for left or right
             dy=0
             if node_start.parent:
@@ -455,7 +469,7 @@ class IRrtStar:
         else: # not in same row
             dxleft=node_start.x+node_end.x
             dxright=99-node_start.x+99-node_end.x
-            if dxright<=dxleft:
+            if dxright<dxleft:
                 direction="right"
                 #print("direction RIGHT")
                 dx=dxright

@@ -14,6 +14,9 @@ import matplotlib.patches as patches
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) +
                 "/../../Sampling_based_Planning/")
+from matplotlib import cm
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 
 #from Sampling_based_Planning.rrt_2D import env, plotting, utils
 from PathPlanning.Sampling_based_Planning.rrt_2D import env, plotting, utils
@@ -85,7 +88,7 @@ class IRrtStar:
                     count_down-=1
                 else:
                     count_down=3 #reset
-            if count_down==0 and k>500:
+            if count_down<=0 and k>300:
                 print("Reached stopping criterion at iteration "+str(k))
                 break # we stop iterating if the best score is not improving much anymore and we already passed at least ... cycles
 
@@ -150,10 +153,26 @@ class IRrtStar:
                 self.animation(x_center=x_center, c_best=c_best, dist=dist, theta=theta)
 
         self.path = self.ExtractPath(x_best)
+        #for point in reversed(x_best.infopath):
+        #    print("infopoint (x,y)=("+str(point[0])+","+str(point[1])+")")
+        print("length of infopath: "+str(len(x_best.infopath)))
         self.animation(x_center=x_center, c_best=c_best, dist=dist, theta=theta)
         plt.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
-        plt.plot([x for x, _ in self.path[0:1]],[y for _, y in self.path[0:1]], '-b') # to see whether the path actually ends at the goal
+        #plt.plot([x for x, _ in x_best.infopath], [y for _, y in x_best.infopath], '-b')
+        plt.plot([x for x, _ in self.path[-2:]],[y for _, y in self.path[-2:]], '-b') # to see whether the path actually ends at the goal
         plt.pause(0.01)
+        plt.show()
+
+        fig, ax = plt.subplots()
+        colormap = cm.Blues
+        colormap.set_bad(color='black')
+        im= ax.imshow(self.uncertaintymatrix, colormap, vmin=0, vmax=1, origin='lower')
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax)
+        ax.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
+        ax.set_title("Spatial distribution of uncertainty and final path")
+        fig.tight_layout()
         plt.show()
 
     def Pruning(self, x_new):
@@ -183,8 +202,9 @@ class IRrtStar:
                     #costlist[index]=np.nan
                     #infolist[index]=np.nan
                     # TODO still: how to "pop" or "remove" from the list we iterate over? to speed up pruningz
-                    if node1 in self.X_soln:
-                        self.X_soln.remove(node1)  # also from the solutions
+                    #if node1 in self.X_soln:
+                    #    self.X_soln.remove(node1)  # also from the solutions
+                    self.X_soln.discard(node1)
 
     def Steer(self, x_start, x_goal):
         dist, theta = self.get_distance_and_angle(x_start, x_goal)
@@ -296,6 +316,8 @@ class IRrtStar:
 
         return cost
     def Info(self,node):
+        if node == self.x_start:
+            return 0.0
         if node.parent is None:
             return 0.0
         info = self.uncertaintymatrix[int(node.y),int(node.x)]
@@ -306,25 +328,38 @@ class IRrtStar:
         return info
 
     def Info_cont(self,node):
+        if node == self.x_start:
+            return 0.0
         if node.parent is None:
             return 0.0
         dt = 1/(2*self.step_len)
         t=0
-        points=node.parent.infopath
+        #points=node.parent.infopath
+        points=[]
         info=0
+        node.infopath=[]
+        for point in node.parent.infopath:
+            node.infopath.append(point)
+        #node.infopath=node.parent.infopath
+        #print("node coordinates: ("+str(node.x)+","+str(node.y)+")")
+        #print("parent node coordinates: ("+str(node.parent.x)+","+str(node.parent.y)+")")
+
         while t<1.0:
             xline = node.x-node.parent.x
             yline = node.y-node.parent.y
             xpoint = math.floor(node.parent.x+t*xline)
             ypoint = math.floor(node.parent.y+t*yline)
-            if [xpoint,ypoint] not in points: # only info value when the point is not already monitored before
+            if [xpoint,ypoint] not in node.infopath: # only info value when the point is not already monitored before
                 info+=self.uncertaintymatrix[ypoint,xpoint]
-                points.append([xpoint,ypoint])
+                #points.append([xpoint,ypoint])
+                node.infopath.append([xpoint,ypoint])
+                #print("new info point coordinates: (" + str(xpoint) + "," + str(ypoint) + ")")
             t+=dt
-        node.infopath=points
-        while node.parent:
-            info += node.parent.info
-            node = node.parent
+        #node.infopath=points
+        # while node.parent:
+        #     info += node.parent.info
+        #     node = node.parent
+        info+=node.parent.info
         return info
 
     @staticmethod

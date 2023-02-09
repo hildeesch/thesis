@@ -8,8 +8,8 @@ class Env:
     def __init__(self):
         #self.x_range = (0, 50)
         #self.y_range = (0, 30)
-        self.x_range = (0, 100)
-        self.y_range = (0, 100)
+        self.x_range = (0, 99)
+        self.y_range = (0, 99)
         self.obs_boundary = self.obs_boundary()
         self.obs_circle = self.obs_circle()
         self.obs_rectangle = self.obs_rectangle()
