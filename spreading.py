@@ -43,7 +43,7 @@ def weedsspread(matrixstructure,matrixplants,weed,show=True):
                                 elif not plantattach and matrixplants[row+rowadd,col+coladd]==0.0:
                                     weedmatrix[row + rowadd, col + coladd] = 0.5
 
-    uncertaintymatrix = uncertaintyweeds(matrixstructure,matrixplants,weedmatrix,weed, True)
+    uncertaintymatrix = uncertaintyweeds(matrixstructure,matrixplants,weedmatrix,weed, False)
     if show:
         fig, ax = plt.subplots()
         colormap = cm.Oranges
@@ -204,7 +204,7 @@ def pathogenspread(matrixstructure,matrixplants,pathogen,show=True):
                                             pathogenmatrix_new[row, col] = min(saturation,pathogenmatrix[row, col]*(1+reproductionrate)+reproductionrate * maxpathogenvalue * (
                                                         1 / spreadspeed) * 0.5)
                 pathogenmatrix=deepcopy(pathogenmatrix_new)
-    uncertaintymatrix= uncertaintypathogen(matrixstructure,matrixplants,pathogenmatrix,pathogen,True)
+    uncertaintymatrix= uncertaintypathogen(matrixstructure,matrixplants,pathogenmatrix,pathogen,False)
 
 
     if show:

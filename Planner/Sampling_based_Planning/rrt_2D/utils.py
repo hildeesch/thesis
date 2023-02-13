@@ -13,8 +13,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)) +
 
 #from Sampling_based_Planning.rrt_2D import env
 #from Sampling_based_Planning.rrt_2D.rrt import Node
-from PathPlanning.Sampling_based_Planning.rrt_2D import env
-from PathPlanning.Sampling_based_Planning.rrt_2D.rrt import Node
+from Planner.Sampling_based_Planning.rrt_2D import env
+from Planner.Sampling_based_Planning.rrt_2D.rrt import Node
 
 from PathPlanning.Sampling_based_Planning.rrt_2D import informed_rrt_star_rig_spread
 
@@ -89,7 +89,6 @@ class Utils:
     def is_collision(self, start, end):
         if self.is_inside_obs(start) or self.is_inside_obs(end):
             return True
-
         o, d = self.get_ray(start, end)
         obs_vertex = self.get_obs_vertex()
 
@@ -106,7 +105,6 @@ class Utils:
         for (x, y, r) in self.obs_circle:
             if self.is_intersect_circle(o, d, [x, y], r):
                 return True
-
         return False
 
     def is_inside_obs(self, node):
@@ -121,10 +119,11 @@ class Utils:
                     and 0 <= node.y - (y - delta) <= h + 2 * delta:
                 return True
 
-        for (x, y, w, h) in self.obs_boundary:
-            if 0 <= node.x - (x - delta) <= w + 2 * delta \
-                    and 0 <= node.y - (y - delta) <= h + 2 * delta:
-                return True
+        # for (x, y, w, h) in self.obs_boundary:
+        #     if 0 <= node.x - (x - delta) <= w + 2 * delta \
+        #             and 0 <= node.y - (y - delta) <= h + 2 * delta:
+        #         print("option 5")
+        #         return True
 
         # added:
         if np.isnan(self.uncertaintymatrix[int(node.y),int(node.x)]):

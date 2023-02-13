@@ -18,7 +18,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)) +
 from matplotlib import cm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 #from Sampling_based_Planning.rrt_2D import env, plotting, utils
-from PathPlanning.Sampling_based_Planning.rrt_2D import env, plotting, utils
+from Planner.Sampling_based_Planning.rrt_2D import env, plotting, utils
 
 class Node:
     def __init__(self, n):
@@ -57,7 +57,7 @@ class IRrtStar:
         self.X_soln = set()
         self.path = None
 
-        self.budget=250
+        self.budget=500
         self.uncertaintymatrix = uncertaintymatrix
         self.rowdist=4
 
@@ -107,7 +107,7 @@ class IRrtStar:
             for node in self.V:
                 if node.x == x_new.x and node.y == x_new.y:  # co-located nodes
                     double=True #there is already a node at this location, so we skip it
-                    # print("double")
+                    print("double")
                     break
             #if x_nearest.cost + self.Line(x_nearest, x_new) + self.Line(x_new, self.x_goal) < self.budget and not double:  # budget check for nearest parent (to make it more efficient)
             if not double:  # budget check for nearest parent (to make it more efficient)
@@ -115,11 +115,11 @@ class IRrtStar:
                 for x_near in self.Near(self.V,x_new):
 
                     if x_new and not self.utils.is_collision(x_near, x_new):
-                        c_min = x_near.cost + self.Line(x_near, x_new) #TODO makes no sense with rows
-
+                        #c_min = x_near.cost + self.Line(x_near, x_new) #TODO makes no sense with rows
+                        c_min = x_near.cost+self.get_distance_rows(x_near,x_new)
                         # if c_min+self.Line(x_new, self.x_goal) > self.budget:
                         #     print("past budget (step 2): "+str(c_min+self.Line(x_new, self.x_goal)))
-                        if c_min+self.Line(x_new, self.x_goal) <self.budget: #extra check for budget for actual parent
+                        if c_min+self.get_distance_rows(x_new,self.x_goal) <=self.budget: #extra check for budget for actual parent
                             node_new = Node((x_new.x,x_new.y))
                             node_new.parent = x_near #added
                             node_new.cost = self.Cost(node_new) #+self.Line(x_new, self.x_goal)
@@ -156,9 +156,9 @@ class IRrtStar:
 
         self.path = self.ExtractPath(x_best)
         self.animation(x_center=x_center, c_best=c_best, dist=dist, theta=theta)
-        plt.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
-        plt.plot([x for x, _ in x_best.infopath], [y for _, y in x_best.infopath], '-b')
-        plt.plot([x for x, _ in self.path[-2:]],[y for _, y in self.path[-2:]], '-b') # to see whether the path actually ends at the goal
+        #plt.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
+        plt.plot([x for x, _ in x_best.infopath], [y for _, y in x_best.infopath], '-r')
+        #plt.plot([x for x, _ in self.path[:2]],[y for _, y in self.path[:2]], '-b') # to see whether the path actually ends at the goal
         plt.pause(0.01)
         plt.show()
 
@@ -169,8 +169,8 @@ class IRrtStar:
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax)
-        ax.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
-        plt.plot([x for x, _ in x_best.infopath], [y for _, y in x_best.infopath], '-b')
+        #ax.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
+        ax.plot([x for x, _ in x_best.infopath], [y for _, y in x_best.infopath], '-r')
         ax.set_title("Spatial distribution of uncertainty and final path")
         fig.tight_layout()
         plt.show()
@@ -207,10 +207,44 @@ class IRrtStar:
 
     def Steer(self, x_start, x_goal):
         dist, theta = self.get_distance_and_angle(x_start, x_goal)
+        dist = self.get_distance_rows(x_start,x_goal)
+        closer=False
+        if dist>self.step_len:
+            #just for now for debugging purposes
+            closer=True
+        else:
+            print("x_rand close enough, x_rand = x_new")
+            #return x_goal
+            return Node((int(x_goal.x), int(x_goal.y)))
         dist = min(self.step_len, dist)
-        node_new = Node((math.floor(x_start.x + dist * math.cos(theta)),
-                         math.floor(x_start.y + dist * math.sin(theta))))
+        withinreach = False
+        while not withinreach:
+            node_new = Node((math.floor(x_start.x + dist * math.cos(theta)),
+                         int((x_start.y + dist * math.sin(theta)//self.rowdist)*self.rowdist)))
+            if self.get_distance_rows(x_start,node_new)>self.step_len:
+                dist-=1
+            else:
+                withinreach=True
+
+            if dist<=0: #to prevent going into negative numbers, we will just pick a node in the row of the nearest node
+                print("dist: "+str(dist))
+                # see if we can go up
+                yvalue= min(99,x_start.y+self.rowdist) # make sure we don't go above 99
+                if x_start.x<50:
+                    xvalue=0
+                else:
+                    xvalue=99
+                #xvalue= np.random.choice([0,99])
+                node_new = Node((int(xvalue),int(yvalue)))
+                if self.get_distance_rows(x_start,node_new)>self.step_len: # if going up is too far
+                    print("can't go up")
+                    yvalue = x_start.y
+                    xvalue = np.random.choice([max(0,x_start.x-self.step_len),min(99,x_start.x+self.step_len)])
+                    node_new = Node((int(xvalue), int(yvalue)))
+
+                withinreach=True
         #node_new.parent = x_start
+        print("WE NEED TO SAMPLE CLOSER TO THE NEAREST: ("+str(x_start.x)+","+str(x_start.y)+")")
         print("x_rand=("+str(x_goal.x)+","+str(x_goal.y)+") - dist = "+str(dist)+" - x_new=("+str(node_new.x)+","+str(node_new.y)+")")
         return node_new
 
@@ -218,7 +252,8 @@ class IRrtStar:
         max_dist = self.step_len
         dist_table = [self.get_distance_rows(node,nd) for nd in nodelist]
         X_near = [nodelist[ind] for ind in range(len(dist_table)) if (dist_table[ind] <= max_dist and dist_table[ind] > 0.0
-                                                                    and not self.utils.is_collision(nodelist[ind], node))]
+                                                      and not self.utils.is_collision(nodelist[ind], node)==True)]
+        print("number of near nodes: "+str(len(X_near)))
         return X_near
 
     def Sample(self, c_max, c_min, x_center, C):
@@ -256,12 +291,12 @@ class IRrtStar:
             #return Node((np.random.uniform(self.x_range[0] + delta, self.x_range[1] - delta),
             #             np.random.uniform(self.y_range[0] + delta, self.y_range[1] - delta)))
             return Node((np.random.random_integers(int(self.x_range[0]), int(self.x_range[1])),
-                         ((np.random.random_integers(int(self.y_range[0]),int(self.y_range[1])))//self.rowdist)*self.rowdist))
+                         (min(99,((np.random.random_integers(int(self.y_range[0]),int(self.y_range[1])))//self.rowdist)*self.rowdist))))
         return self.x_goal
 
     def ExtractPath(self, node):
-        print("Final cost: "+str(self.Cost(node)))
-        print("Final info value: "+str(self.Info(node)))
+        print("Final cost: "+str(node.cost))
+        print("Final info value: "+str(node.info))
         path = [[self.x_goal.x, self.x_goal.y]]
 
         while node.parent:
@@ -274,7 +309,7 @@ class IRrtStar:
 
     def InGoalRegion(self, node):
         #if self.Line(node, self.x_goal) < self.step_len:
-        if self.Cost(node)+self.Line(node, self.x_goal) < self.budget:
+        if node.cost+self.get_distance_rows(node,self.x_goal) < self.budget:
             return True
 
         return False
@@ -290,10 +325,11 @@ class IRrtStar:
 
         return C
 
-    @staticmethod
-    def Nearest(nodelist, n):
-        return nodelist[int(np.argmin([(nd.x - n.x) ** 2 + (nd.y - n.y) ** 2
-                                       for nd in nodelist]))]
+    #@staticmethod
+    def Nearest(self,nodelist, n):
+        #return nodelist[int(np.argmin([(nd.x - n.x) ** 2 + (nd.y - n.y) ** 2
+        #                               for nd in nodelist]))]
+        return nodelist[int(np.argmin([self.get_distance_rows(nd,n) for nd in nodelist]))]
 
     @staticmethod
     def Line(x_start, x_goal):
@@ -308,12 +344,12 @@ class IRrtStar:
 
         cost = self.get_distance_rows(node,node.parent)
 
-        while node.parent:
-            #print("node.x: "+str(node.x)+"node.parent.x: "+str(node.parent.x))
-            #print("node.y: "+str(node.y)+"node.parent.y: "+str(node.parent.y))
-            cost += node.parent.cost
-            node = node.parent
-
+        #while node.parent:
+        #    #print("node.x: "+str(node.x)+"node.parent.x: "+str(node.parent.x))
+        #    #print("node.y: "+str(node.y)+"node.parent.y: "+str(node.parent.y))
+        #    cost += node.parent.cost
+        #    node = node.parent
+        cost+=node.parent.cost
         return cost
     def Info(self,node):
         if node.parent is None:
@@ -466,7 +502,7 @@ class IRrtStar:
             dy=0
             if node_start.parent:
                 node_start.direction=[direction,"none"]
-        else: # not in same row
+        else:  # not in same row
             dxleft=node_start.x+node_end.x
             dxright=99-node_start.x+99-node_end.x
             if dxright<dxleft:
@@ -474,8 +510,8 @@ class IRrtStar:
                 #print("direction RIGHT")
                 dx=dxright
             else:
-                #print("direction LEFT")
                 direction="left"
+                #print("direction LEFT")
                 dx=dxleft
             dy=abs(node_end.y-node_start.y)
             if node_start.y>node_end.y:
@@ -582,7 +618,7 @@ def main(uncertaintymatrix):
     #x_goal = (37, 18)  # Goal node
     x_goal = (19,8)
 
-    rrt_star = IRrtStar(x_start, x_goal, 50, 0.0, 15, 2000,uncertaintymatrix)
+    rrt_star = IRrtStar(x_start, x_goal, 20, 0.0, 15, 2000,uncertaintymatrix)
     rrt_star.planning()
 
 if __name__ == '__main__':

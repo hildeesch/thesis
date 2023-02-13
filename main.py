@@ -80,11 +80,12 @@ def print_hi(name):
     spread_matrix, uncertainty_matrix = pathogenspread(matrix_square,heat_matrix,pathogen1, False)
     weed1 = Weed(patchnr=4,patchsize=7,spreadrange=3,spreadspeed=1,saturation=3,plantattach=False)
     #spread_matrix,uncertainty_matrix = weedsspread(matrix_convex,heat_matrix,weed1)
-    path=[[0,0],[1,0],[2,0],[2,1],[2,2],[2,3],[2,4],[2,5],[2,6],[2,7],[2,8],[2,9],
-    [2,10],[3,10],[4,10],[5,10],[6,11],[6,12],[7,12],[8,13],[9,14],[10,14],[11,15]]
+    #path=[[0,0],[1,0],[2,0],[2,1],[2,2],[2,3],[2,4],[2,5],[2,6],[2,7],[2,8],[2,9],
+    #[2,10],[3,10],[4,10],[5,10],[6,11],[6,12],[7,12],[8,13],[9,14],[10,14],[11,15]]
+    del spread_matrix #to save memory
     #showpath(spread_matrix,path)
-    #rig(uncertainty_matrix)
-    rig_rows(uncertainty_matrix)
+    rig(uncertainty_matrix)
+    #rig_rows(uncertainty_matrix)
     print("sum entropy = "+str(np.nansum(uncertainty_matrix)))
 
 if __name__ == '__main__':

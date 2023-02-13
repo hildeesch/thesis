@@ -19,16 +19,19 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
 #from Sampling_based_Planning.rrt_2D import env, plotting, utils
-from PathPlanning.Sampling_based_Planning.rrt_2D import env, plotting, utils
+from Planner.Sampling_based_Planning.rrt_2D import env, plotting, utils
 
 class Node:
     def __init__(self, n):
         self.x = n[0]
         self.y = n[1]
         self.parent = None
-        self.cost = 0
+        self.cost = 0 # cost upto this node
         self.info = 0
-        self.infopath = []
+        self.infopath = [] # all grid points that are monitored
+        self.totalcost = 0 # including the distance to the goal point
+        self.totalinfo = 0 # including the last part to the goal point
+        self.lastinfopath = [] # the monitored grid elements from the node to the goal
 
 
 class IRrtStar:
@@ -77,8 +80,8 @@ class IRrtStar:
         for k in range(self.iter_max):
             #time.sleep(0.1)
             if self.X_soln:
-                cost = {node: node.cost for node in self.X_soln}
-                info = {node: node.info for node in self.X_soln}
+                cost = {node: node.totalcost for node in self.X_soln}
+                info = {node: node.totalinfo for node in self.X_soln}
                 #x_best = min(cost, key=cost.get)
                 x_best = max(info, key=info.get)
                 #c_best = cost[x_best]
@@ -88,7 +91,7 @@ class IRrtStar:
                     count_down-=1
                 else:
                     count_down=3 #reset
-            if count_down<=0 and k>300:
+            if count_down<=0 and k>400:
                 print("Reached stopping criterion at iteration "+str(k))
                 break # we stop iterating if the best score is not improving much anymore and we already passed at least ... cycles
 
@@ -143,6 +146,7 @@ class IRrtStar:
                             if self.InGoalRegion(node_new):
                                 if not self.utils.is_collision(node_new, self.x_goal):
                                     self.X_soln.add(node_new)
+                                    self.LastPath(node_new)
                                     # new_cost = self.Cost(x_new) + self.Line(x_new, self.x_goal)
                                     # if new_cost < c_best:
                                     #     c_best = new_cost
@@ -155,11 +159,12 @@ class IRrtStar:
         self.path = self.ExtractPath(x_best)
         #for point in reversed(x_best.infopath):
         #    print("infopoint (x,y)=("+str(point[0])+","+str(point[1])+")")
-        print("length of infopath: "+str(len(x_best.infopath)))
+        print("length of infopath: "+str(len(x_best.infopath)+len(x_best.lastinfopath)))
         self.animation(x_center=x_center, c_best=c_best, dist=dist, theta=theta)
         plt.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
         #plt.plot([x for x, _ in x_best.infopath], [y for _, y in x_best.infopath], '-b')
-        plt.plot([x for x, _ in self.path[-2:]],[y for _, y in self.path[-2:]], '-b') # to see whether the path actually ends at the goal
+        #plt.plot([x for x, _ in x_best.lastinfopath], [y for _, y in x_best.lastinfopath], '-c')
+        #plt.plot([x for x, _ in self.path[:2]],[y for _, y in self.path[:2]], '-k') # to see whether the path actually ends at the goal
         plt.pause(0.01)
         plt.show()
 
@@ -261,21 +266,21 @@ class IRrtStar:
         return self.x_goal
 
     def ExtractPath(self, node):
-        print("Final cost: "+str(self.Cost(node)))
-        print("Final info value: "+str(self.Info(node)))
+        print("Final cost: "+str(node.totalcost))
+        print("Final info value: "+str(node.totalinfo))
         path = [[self.x_goal.x, self.x_goal.y]]
 
         while node.parent:
             path.append([node.x, node.y])
             node = node.parent
-
-        path.append([self.x_start.x, self.x_start.y])
+        path.append([node.x,node.y]) # this should be the start
+        #path.append([self.x_start.x, self.x_start.y]) #in principle this shouldn't be necessary
 
         return path
 
     def InGoalRegion(self, node):
         #if self.Line(node, self.x_goal) < self.step_len:
-        if self.Cost(node)+self.Line(node, self.x_goal) < self.budget:
+        if node.cost+self.Line(node, self.x_goal) < self.budget:
             return True
 
         return False
@@ -299,6 +304,28 @@ class IRrtStar:
     @staticmethod
     def Line(x_start, x_goal):
         return math.hypot(x_goal.x - x_start.x, x_goal.y - x_start.y)
+
+    def LastPath(self,node):
+        node.totalcost=node.cost+math.hypot(node.x - self.x_goal.x, node.y - self.x_goal.y)
+        dt = 1/(2*(node.totalcost-node.cost))
+        t=0
+        node.lastinfopath=[]
+        info=0
+
+        while t<1.0:
+            xline = node.x-self.x_goal.x
+            yline = node.y-self.x_goal.y
+            xpoint = math.floor(self.x_goal.x+t*xline)
+            ypoint = math.floor(self.x_goal.y+t*yline)
+            if [xpoint,ypoint] not in node.infopath and [xpoint,ypoint] not in node.lastinfopath: # only info value when the point is not already monitored before
+                info+=self.uncertaintymatrix[ypoint,xpoint]
+                node.lastinfopath.append([xpoint,ypoint])
+            t+=dt
+
+        info+=node.parent.info
+
+
+        node.totalinfo=node.info+info
 
     def Cost(self, node):
         if node == self.x_start:
