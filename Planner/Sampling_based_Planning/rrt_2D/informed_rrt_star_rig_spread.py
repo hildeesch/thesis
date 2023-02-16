@@ -79,7 +79,7 @@ class IRrtStar:
         i_best = 0
         for k in range(self.iter_max):
             #time.sleep(0.1)
-            if self.X_soln:
+            if k>=self.iter_max-1: #only evaluate the last cycle to save time
                 cost = {node: node.totalcost for node in self.X_soln}
                 info = {node: node.totalinfo for node in self.X_soln}
                 #x_best = min(cost, key=cost.get)
@@ -127,30 +127,17 @@ class IRrtStar:
                             #node_new.info = self.Info(node_new)
                             node_new.info = self.Info_cont(node_new)
                             self.V.append(node_new) #generate a "node"/trajectory to each near point
-                            # choose parent
-                            # for x_near in X_near:
-                            #     c_new = self.Cost(x_near) + self.Line(x_near, x_new)
-                            #     if c_new < c_min:
-                            #         x_new.parent = x_near
-                            #         c_min = c_new
-
-                            #print("append new node x: "+str(x_new.x)+" parent x:"+str(x_new.parent.x))
 
                             #rewire
-                            # for x_near in X_near:
-                            #     c_near = self.Cost(x_near)
-                            #     c_new = self.Cost(x_new) + self.Line(x_new, x_near)
-                            #     if c_new < c_near:
-                            #         x_near.parent = x_new
+                            for x_near in self.Near(self.V,x_new,self.search_radius):
+                                self.Rewiring(x_near,node_new)
+
 
                             if self.InGoalRegion(node_new):
                                 if not self.utils.is_collision(node_new, self.x_goal):
                                     self.X_soln.add(node_new)
                                     self.LastPath(node_new)
-                                    # new_cost = self.Cost(x_new) + self.Line(x_new, self.x_goal)
-                                    # if new_cost < c_best:
-                                    #     c_best = new_cost
-                                    #     x_best = x_new
+
                 self.Pruning(node_new)
 
             if k % 20 == 0:
@@ -171,7 +158,7 @@ class IRrtStar:
         fig, ax = plt.subplots()
         colormap = cm.Blues
         colormap.set_bad(color='black')
-        im= ax.imshow(self.uncertaintymatrix, colormap, vmin=0, vmax=1, origin='lower')
+        im= ax.imshow(self.uncertaintymatrix, colormap, vmin=0, vmax=3, origin='lower')
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax)
@@ -179,6 +166,50 @@ class IRrtStar:
         ax.set_title("Spatial distribution of uncertainty and final path")
         fig.tight_layout()
         plt.show()
+
+    def FindInfo(self, node_end_x,node_end_y,node_start_x,node_start_y,currentinfopath,distance,totalpath=True):
+        #node_end = the goal or new node
+        #node_start = the (potential) parent
+        #currentinfopath = the infopath of the parent (node_start)
+        #distance = the distance between the nodes (e.g. self.step_len or search_radius)
+        dt = 1 / (2 * distance)
+        t = 0
+        info = 0
+        infopath = []
+        if totalpath: #if we want to append the current path to the new path
+            for point in currentinfopath:
+                infopath.append(point)
+
+        while t < 1.0:
+            xline = node_end_x - node_start_x
+            yline = node_end_y - node_start_y
+            xpoint = math.floor(node_start_x + t * xline)
+            ypoint = math.floor(node_start_y + t * yline)
+            if [xpoint, ypoint] not in infopath:  # only info value when the point is not already monitored before
+                info += self.uncertaintymatrix[ypoint, xpoint]
+                infopath.append([xpoint, ypoint])
+            t += dt
+
+        return infopath, info
+    def Rewiring(self, x_near,x_new):
+        c_near = x_near.cost
+        c_new = x_new.cost + self.Line(x_new, x_near)
+        if x_new.parent.x==x_near.x and x_new.parent.y==x_near.y:
+            return # if the parent of x_new = x_near, we don't want to make the parent of x_near = x_new (because then we create a loose segment
+
+        [infopath,info] = self.FindInfo(x_near.x,x_near.y,x_new.x,x_new.y,x_new.infopath,self.search_radius,True)
+
+        info += x_new.info
+
+        info_near = x_near.info
+
+        info_new = info
+        if c_new < c_near and info_new>=info_near: #note: this is different than the condition in pruning
+            x_near.parent = x_new
+            x_near.info = info_new
+            x_near.cost = c_new
+            x_near.infopath = infopath
+            #print("Rewiring took place!!")
 
     def Pruning(self, x_new):
         nodelist=[]
@@ -220,8 +251,9 @@ class IRrtStar:
         print("x_rand=("+str(x_goal.x)+","+str(x_goal.y)+") - dist = "+str(dist)+" - x_new=("+str(node_new.x)+","+str(node_new.y)+")")
         return node_new
 
-    def Near(self, nodelist, node):
-        max_dist = self.step_len
+    def Near(self, nodelist, node, max_dist=0):
+        if max_dist==0:
+            max_dist = self.step_len
         dist_table = [self.get_distance_and_angle(nd, node)[0] for nd in nodelist]
         X_near = [nodelist[ind] for ind in range(len(dist_table)) if (dist_table[ind] <= max_dist and dist_table[ind] > 0.0
                                                                     and not self.utils.is_collision(nodelist[ind], node))]
@@ -256,14 +288,8 @@ class IRrtStar:
                 return np.array([[x], [y], [0.0]])
 
     def SampleFreeSpace(self):
-        delta = self.delta
-
-        if np.random.random() > self.goal_sample_rate: # TODO maybe take this out
-            #return Node((np.random.uniform(self.x_range[0] + delta, self.x_range[1] - delta),
-            #             np.random.uniform(self.y_range[0] + delta, self.y_range[1] - delta)))
-            return Node((np.random.random_integers(int(self.x_range[0]), int(self.x_range[1])),
-                         np.random.random_integers(int(self.y_range[0]),int(self.y_range[1]))))
-        return self.x_goal
+        return Node((np.random.random_integers(int(self.x_range[0]), int(self.x_range[1])),
+                     np.random.random_integers(int(self.y_range[0]),int(self.y_range[1]))))
 
     def ExtractPath(self, node):
         print("Final cost: "+str(node.totalcost))
@@ -307,24 +333,8 @@ class IRrtStar:
 
     def LastPath(self,node):
         node.totalcost=node.cost+math.hypot(node.x - self.x_goal.x, node.y - self.x_goal.y)
-        dt = 1/(2*(node.totalcost-node.cost))
-        t=0
-        node.lastinfopath=[]
-        info=0
-
-        while t<1.0:
-            xline = node.x-self.x_goal.x
-            yline = node.y-self.x_goal.y
-            xpoint = math.floor(self.x_goal.x+t*xline)
-            ypoint = math.floor(self.x_goal.y+t*yline)
-            if [xpoint,ypoint] not in node.infopath and [xpoint,ypoint] not in node.lastinfopath: # only info value when the point is not already monitored before
-                info+=self.uncertaintymatrix[ypoint,xpoint]
-                node.lastinfopath.append([xpoint,ypoint])
-            t+=dt
-
-        info+=node.parent.info
-
-
+        [infopath,info] = self.FindInfo(self.x_goal.x,self.x_goal.y,node.x,node.y,node.infopath,node.totalcost-node.cost,False)
+        node.lastinfopath=infopath
         node.totalinfo=node.info+info
 
     def Cost(self, node):
@@ -359,33 +369,11 @@ class IRrtStar:
             return 0.0
         if node.parent is None:
             return 0.0
-        dt = 1/(2*self.step_len)
-        t=0
-        #points=node.parent.infopath
-        points=[]
-        info=0
-        node.infopath=[]
-        for point in node.parent.infopath:
-            node.infopath.append(point)
-        #node.infopath=node.parent.infopath
-        #print("node coordinates: ("+str(node.x)+","+str(node.y)+")")
-        #print("parent node coordinates: ("+str(node.parent.x)+","+str(node.parent.y)+")")
 
-        while t<1.0:
-            xline = node.x-node.parent.x
-            yline = node.y-node.parent.y
-            xpoint = math.floor(node.parent.x+t*xline)
-            ypoint = math.floor(node.parent.y+t*yline)
-            if [xpoint,ypoint] not in node.infopath: # only info value when the point is not already monitored before
-                info+=self.uncertaintymatrix[ypoint,xpoint]
-                #points.append([xpoint,ypoint])
-                node.infopath.append([xpoint,ypoint])
-                #print("new info point coordinates: (" + str(xpoint) + "," + str(ypoint) + ")")
-            t+=dt
-        #node.infopath=points
-        # while node.parent:
-        #     info += node.parent.info
-        #     node = node.parent
+        [infopath,info] = self.FindInfo(node.x,node.y,node.parent.x,node.parent.y,node.parent.infopath,self.step_len,True)
+
+        node.infopath=infopath
+
         info+=node.parent.info
         return info
 

@@ -6,6 +6,7 @@ from monitortreat import showpath
 from spreading import weedsspread
 from spreading import pathogenspread
 import numpy as np
+import time
 
 from weed import Weed
 from pathogen import Pathogen
@@ -73,20 +74,27 @@ def print_hi(name):
     matrix_nonconvex[29:61,-8] = np.nan
     matrix_nonconvex[34:55,-9] = np.nan
 
-    #show_map(matrix_nonconvex)
-    heat_matrix = withrows(matrix_square,2,4,False)
 
-    pathogen1 = Pathogen(patchnr=5,infectionduration=3,spreadrange=5, spreadspeed=1, reproductionrate=0.2, saturation=3)
-    spread_matrix, uncertainty_matrix = pathogenspread(matrix_square,heat_matrix,pathogen1, False)
-    weed1 = Weed(patchnr=4,patchsize=7,spreadrange=3,spreadspeed=1,saturation=3,plantattach=False)
+    time_start = time.time()
+    #show_map(matrix_nonconvex)
+    #heat_matrix = withrows(matrix_square,2,4,False)
+
+    #pathogen1 = Pathogen(patchnr=5,infectionduration=3,spreadrange=5, spreadspeed=1, reproductionrate=0.2, saturation=3)
+    #spread_matrix, uncertainty_matrix = pathogenspread(matrix_square,heat_matrix,pathogen1, False)
+    #weed1 = Weed(patchnr=4,patchsize=7,spreadrange=3,spreadspeed=1,saturation=3,plantattach=False)
     #spread_matrix,uncertainty_matrix = weedsspread(matrix_convex,heat_matrix,weed1)
     #path=[[0,0],[1,0],[2,0],[2,1],[2,2],[2,3],[2,4],[2,5],[2,6],[2,7],[2,8],[2,9],
     #[2,10],[3,10],[4,10],[5,10],[6,11],[6,12],[7,12],[8,13],[9,14],[10,14],[11,15]]
-    del spread_matrix #to save memory
+    #del spread_matrix #to save memory
+    #np.save('uncertainty_matrixfile.npy',uncertainty_matrix)
+    uncertainty_matrix= np.load('uncertainty_matrixfile.npy')
     #showpath(spread_matrix,path)
     rig(uncertainty_matrix)
     #rig_rows(uncertainty_matrix)
     print("sum entropy = "+str(np.nansum(uncertainty_matrix)))
+    time_end = time.time()
+    time_total = time_end-time_start
+    print("Time taken = "+str(time_total)+" seconds. This is more than "+str(time_total//60)+" minutes")
 
 if __name__ == '__main__':
     print_hi('PyCharm')
