@@ -16,7 +16,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)) +
 from Planner.Sampling_based_Planning.rrt_2D import env
 from Planner.Sampling_based_Planning.rrt_2D.rrt import Node
 
-from PathPlanning.Sampling_based_Planning.rrt_2D import informed_rrt_star_rig_spread
+from Planner.Sampling_based_Planning.rrt_2D import informed_rrt_star_rig_spread
 
 
 class Utils:

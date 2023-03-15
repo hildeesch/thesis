@@ -2,17 +2,24 @@
 from heatmap import show_map
 from heatmap import withrows
 from heatmap import norows
+from heatmap import polygon
 from monitortreat import showpath
 from spreading import weedsspread
 from spreading import pathogenspread
 import numpy as np
 import time
+from copy import deepcopy
+
 
 from weed import Weed
 from pathogen import Pathogen
 
 from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread import main as rig
 from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread_rows import main as rig_rows
+from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread_rows_v2 import main as rig_rows_v2
+
+from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread_matrix import main as rig_matrix
+from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread_rows_matrix import main as rig_rows_matrix
 
 
 # Press Shift+F10 to execute it or replace it with your code.
@@ -20,81 +27,97 @@ from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread_rows im
 
 
 def print_hi(name):
-    matrix_obstacle = np.zeros((100,100))
-    matrix_obstacle[10:20,35:50] = np.nan
-
-    matrix_square = np.zeros((100,100))
-
-    matrix_convex = np.zeros((100,100))
-    matrix_convex[:,0] = np.nan
-    matrix_convex[0:35,1] = np.nan
-    matrix_convex[53:100,1] = np.nan
-    matrix_convex[0:23,2] = np.nan
-    matrix_convex[60:100,2] = np.nan
-    matrix_convex[0:20,3]= np.nan
-    matrix_convex[65:100,3] = np.nan
-    matrix_convex[0:15,4] = np.nan
-    matrix_convex[72:100,4] = np.nan
-    matrix_convex[0:9,5] = np.nan
-    matrix_convex[81:100,5] = np.nan
-    matrix_convex[0:3,6] = np.nan
-    matrix_convex[92:100,6] = np.nan
-    matrix_convex[95:100,7] = np.nan
-    matrix_convex[:,-1] = np.nan
-    matrix_convex[0:35,-2] = np.nan
-    matrix_convex[53:100,-2] = np.nan
-    matrix_convex[0:23,-3] = np.nan
-    matrix_convex[60:100,-3] = np.nan
-    matrix_convex[0:20,-4]= np.nan
-    matrix_convex[65:100,-4] = np.nan
-    matrix_convex[0:15,-5] = np.nan
-    matrix_convex[72:100,-5] = np.nan
-    matrix_convex[0:9,-6] = np.nan
-    matrix_convex[81:100,-6] = np.nan
-    matrix_convex[0:3,-7] = np.nan
-    matrix_convex[92:100,-7] = np.nan
-    matrix_convex[95:100,-8] = np.nan
-
-    matrix_nonconvex = np.zeros((100,100))
-    matrix_nonconvex[:,0] = np.nan
-    matrix_nonconvex[2:88,1] = np.nan
-    matrix_nonconvex[5:80,2] = np.nan
-    matrix_nonconvex[12:76,3] = np.nan
-    matrix_nonconvex[22:69,4] = np.nan
-    matrix_nonconvex[29:61,5] = np.nan
-    matrix_nonconvex[34:55,6] = np.nan
-
-    matrix_nonconvex[:,-1] = np.nan
-    matrix_nonconvex[:,-2] = np.nan
-    matrix_nonconvex[:,-3] = np.nan
-    matrix_nonconvex[2:88,-4] = np.nan
-    matrix_nonconvex[5:80,-5] = np.nan
-    matrix_nonconvex[12:76,-6] = np.nan
-    matrix_nonconvex[22:69,-7] = np.nan
-    matrix_nonconvex[29:61,-8] = np.nan
-    matrix_nonconvex[34:55,-9] = np.nan
+    # matrix_obstacle = np.zeros((100,100))
+    # matrix_obstacle[10:20,35:50] = np.nan
+    #
+    # matrix_square = np.zeros((100,100))
+    #
+    # matrix_convex = np.zeros((100,100))
+    # matrix_convex[:,0] = np.nan
+    # matrix_convex[0:35,1] = np.nan
+    # matrix_convex[53:100,1] = np.nan
+    # matrix_convex[0:23,2] = np.nan
+    # matrix_convex[60:100,2] = np.nan
+    # matrix_convex[0:20,3]= np.nan
+    # matrix_convex[65:100,3] = np.nan
+    # matrix_convex[0:15,4] = np.nan
+    # matrix_convex[72:100,4] = np.nan
+    # matrix_convex[0:9,5] = np.nan
+    # matrix_convex[81:100,5] = np.nan
+    # matrix_convex[0:3,6] = np.nan
+    # matrix_convex[92:100,6] = np.nan
+    # matrix_convex[95:100,7] = np.nan
+    # matrix_convex[:,-1] = np.nan
+    # matrix_convex[0:35,-2] = np.nan
+    # matrix_convex[53:100,-2] = np.nan
+    # matrix_convex[0:23,-3] = np.nan
+    # matrix_convex[60:100,-3] = np.nan
+    # matrix_convex[0:20,-4]= np.nan
+    # matrix_convex[65:100,-4] = np.nan
+    # matrix_convex[0:15,-5] = np.nan
+    # matrix_convex[72:100,-5] = np.nan
+    # matrix_convex[0:9,-6] = np.nan
+    # matrix_convex[81:100,-6] = np.nan
+    # matrix_convex[0:3,-7] = np.nan
+    # matrix_convex[92:100,-7] = np.nan
+    # matrix_convex[95:100,-8] = np.nan
+    #
+    # matrix_nonconvex = np.zeros((100,100))
+    # matrix_nonconvex[:,0] = np.nan
+    # matrix_nonconvex[2:88,1] = np.nan
+    # matrix_nonconvex[5:80,2] = np.nan
+    # matrix_nonconvex[12:76,3] = np.nan
+    # matrix_nonconvex[22:69,4] = np.nan
+    # matrix_nonconvex[29:61,5] = np.nan
+    # matrix_nonconvex[34:55,6] = np.nan
+    #
+    # matrix_nonconvex[:,-1] = np.nan
+    # matrix_nonconvex[:,-2] = np.nan
+    # matrix_nonconvex[:,-3] = np.nan
+    # matrix_nonconvex[2:88,-4] = np.nan
+    # matrix_nonconvex[5:80,-5] = np.nan
+    # matrix_nonconvex[12:76,-6] = np.nan
+    # matrix_nonconvex[22:69,-7] = np.nan
+    # matrix_nonconvex[29:61,-8] = np.nan
+    # matrix_nonconvex[34:55,-9] = np.nan
 
 
     time_start = time.time()
+    field_matrix = polygon("hexagon",False)
+    [heat_matrix,row_nrs,row_edges] = withrows(field_matrix,2,4,False)
+    #heat_matrix = norows(field_matrix,2,False)
     #show_map(matrix_nonconvex)
-    #heat_matrix = withrows(matrix_square,2,4,False)
+    #heat_matrix = withrows(matrix_square,2,4,True)
 
-    #pathogen1 = Pathogen(patchnr=5,infectionduration=3,spreadrange=5, spreadspeed=1, reproductionrate=0.2, saturation=3)
-    #spread_matrix, uncertainty_matrix = pathogenspread(matrix_square,heat_matrix,pathogen1, False)
-    #weed1 = Weed(patchnr=4,patchsize=7,spreadrange=3,spreadspeed=1,saturation=3,plantattach=False)
-    #spread_matrix,uncertainty_matrix = weedsspread(matrix_convex,heat_matrix,weed1)
-    #path=[[0,0],[1,0],[2,0],[2,1],[2,2],[2,3],[2,4],[2,5],[2,6],[2,7],[2,8],[2,9],
-    #[2,10],[3,10],[4,10],[5,10],[6,11],[6,12],[7,12],[8,13],[9,14],[10,14],[11,15]]
+    pathogen1 = Pathogen(patchnr=2,infectionduration=3,spreadrange=5, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.1, saturation=5)
+    #pathogen1 = Pathogen(patchnr=1,infectionduration=6,spreadrange=6, reproductionfraction=0.5, reproductionrate=0.2, standarddeviation=0.01, saturation=3) # one big patch
+    #spread_matrix, uncertainty_matrix = pathogenspread(field_matrix,heat_matrix,pathogen1, True)
+    #weed1 = Weed(patchnr=4,patchsize=7,spreadrange=3,reproductionrate=1,standarddeviation=0.01, saturation=3,plantattach=False)
+    #spread_matrix,uncertainty_matrix = weedsspread(field_matrix,heat_matrix,weed1, False)
+    del heat_matrix
     #del spread_matrix #to save memory
     #np.save('uncertainty_matrixfile.npy',uncertainty_matrix)
-    uncertainty_matrix= np.load('uncertainty_matrixfile.npy')
-    #showpath(spread_matrix,path)
-    rig(uncertainty_matrix)
+
+    #uncertainty_matrix= np.load('uncertainty_matrixfile.npy')
+
+    #uniform matrix:
+    uncertainty_matrix=deepcopy(field_matrix)
+    uncertainty_matrix[uncertainty_matrix==0.5]=0
+    (uncertainty_matrix[:,0:50])[uncertainty_matrix[:,0:50]==0]=0.5
+
+    #rig(uncertainty_matrix)
+    #[finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix)
+    [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_rows_matrix(uncertainty_matrix,row_nrs,row_edges)
     #rig_rows(uncertainty_matrix)
-    print("sum entropy = "+str(np.nansum(uncertainty_matrix)))
+    #rig_rows_v2(uncertainty_matrix,row_nrs,row_edges)
+    #print("sum entropy = "+str(np.nansum(uncertainty_matrix)))
+
     time_end = time.time()
     time_total = time_end-time_start
     print("Time taken = "+str(time_total)+" seconds. This is more than "+str(time_total//60)+" minutes")
+
+    showpath(uncertainty_matrix,finalpath,finalcost,finalinfo,budget, steplength, searchradius, iteration,True,False)
+
 
 if __name__ == '__main__':
     print_hi('PyCharm')

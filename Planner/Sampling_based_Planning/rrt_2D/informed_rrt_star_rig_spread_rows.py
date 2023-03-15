@@ -66,21 +66,23 @@ class IRrtStar:
 
     def init(self):
         cMin, theta = self.get_distance_and_angle(self.x_start, self.x_goal)
-        C = self.RotationToWorldFrame(self.x_start, self.x_goal, cMin)
+        #C = self.RotationToWorldFrame(self.x_start, self.x_goal, cMin)
         xCenter = np.array([[(self.x_start.x + self.x_goal.x) / 2.0],
                             [(self.x_start.y + self.x_goal.y) / 2.0], [0.0]])
         x_best = self.x_start
 
-        return theta, cMin, xCenter, C, x_best
+        #return theta, cMin, xCenter, C, x_best
+        return theta, cMin, xCenter, x_best
 
     def planning(self):
-        theta, dist, x_center, C, x_best = self.init()
+        #theta, dist, x_center, C, x_best = self.init()
+        theta, dist, x_center, x_best = self.init()
         c_best = np.inf
         count_down=3
         i_best = 0
         for k in range(self.iter_max):
             #time.sleep(0.1)
-            if k>=self.iter_max-1: #only evaluate the last cycle to save time
+            if k>=450-3: #only evaluate from when we might want it to stop
                 cost = {node: node.totalcost for node in self.X_soln}
                 info = {node: node.totalinfo for node in self.X_soln}
                 #x_best = min(cost, key=cost.get)
@@ -100,7 +102,8 @@ class IRrtStar:
             if k%50==0:
                 print("ATTENTION!!! ATTENTION!!! ATTENTION!!! AGAIN FIFTY CYCLES FURTHER, CURRENT CYCLE ="+str(k)) # to know how far we are
 
-            x_rand = self.Sample(c_best, dist, x_center, C)
+            #x_rand = self.Sample(c_best, dist, x_center, C)
+            x_rand = self.Sample(c_best, dist, x_center)
             x_nearest = self.Nearest(self.V, x_rand)
             x_new = self.Steer(x_nearest, x_rand) #so that we only generate one new node, not multiple
             #if self.Cost(x_nearest) + self.Line(x_nearest, x_rand) + self.Line(x_rand, self.x_goal) > self.budget:
@@ -326,7 +329,7 @@ class IRrtStar:
             x_near.info = info_new
             x_near.cost = c_new
             x_near.infopath = infopath
-            print("Rewiring took place!!")
+            #print("Rewiring took place!!")
 
     def Pruning(self, x_new):
         nodelist=[]
@@ -412,7 +415,9 @@ class IRrtStar:
         #print("number of near nodes: "+str(len(X_near)))
         return X_near
 
-    def Sample(self, c_max, c_min, x_center, C):
+    #def Sample(self, c_max, c_min, x_center, C):
+    def Sample(self, c_max, c_min, x_center):
+
         c_max=np.inf
         if c_max < np.inf:
             print("not random sampling")
@@ -423,7 +428,7 @@ class IRrtStar:
 
             while True:
                 x_ball = self.SampleUnitBall()
-                x_rand = np.dot(np.dot(C, L), x_ball) + x_center
+                #x_rand = np.dot(np.dot(C, L), x_ball) + x_center
                 if self.x_range[0] + self.delta <= x_rand[0] <= self.x_range[1] - self.delta and \
                         self.y_range[0] + self.delta <= x_rand[1] <= self.y_range[1] - self.delta:
                     break
@@ -627,7 +632,7 @@ class IRrtStar:
 def main(uncertaintymatrix):
     x_start = (18, 8)  # Starting node
     #x_goal = (37, 18)  # Goal node
-    x_goal = (19,8)
+    x_goal = (18,8)
 
     rrt_star = IRrtStar(x_start, x_goal, 30, 0.0, 15, 2000,uncertaintymatrix)
     rrt_star.planning()

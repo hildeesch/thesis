@@ -62,24 +62,31 @@ class IRrtStar:
 
         self.budget=250
         self.uncertaintymatrix = uncertaintymatrix
+        self.costmatrix = np.empty((100*100,100*100),dtype = object )
+        self.anglematrix = np.empty((100*100,100*100),dtype = object )
+        self.infopathmatrix = np.empty((100*100,100*100),dtype = object )
+        self.infomatrix = np.empty((100*100,100*100),dtype = object )
+
 
     def init(self):
         cMin, theta = self.get_distance_and_angle(self.x_start, self.x_goal)
-        C = self.RotationToWorldFrame(self.x_start, self.x_goal, cMin)
+        #C = self.RotationToWorldFrame(self.x_start, self.x_goal, cMin)
         xCenter = np.array([[(self.x_start.x + self.x_goal.x) / 2.0],
                             [(self.x_start.y + self.x_goal.y) / 2.0], [0.0]])
         x_best = self.x_start
 
-        return theta, cMin, xCenter, C, x_best
+        #return theta, cMin, xCenter, C, x_best
+        return theta, cMin, xCenter, x_best
 
     def planning(self):
-        theta, dist, x_center, C, x_best = self.init()
+        #theta, dist, x_center, C, x_best = self.init()
+        theta, dist, x_center, x_best = self.init()
         c_best = np.inf
         count_down=3
         i_best = 0
         for k in range(self.iter_max):
             #time.sleep(0.1)
-            if k>=self.iter_max-1: #only evaluate the last cycle to save time
+            if k>=400-3: #only evaluate from when we might want it to stop #TODO make 400 a variable
                 cost = {node: node.totalcost for node in self.X_soln}
                 info = {node: node.totalinfo for node in self.X_soln}
                 #x_best = min(cost, key=cost.get)
@@ -98,7 +105,8 @@ class IRrtStar:
             if k%50==0:
                 print("ATTENTION!!! ATTENTION!!! ATTENTION!!! AGAIN FIFTY CYCLES FURTHER, CURRENT CYCLE ="+str(k)) # to know how far we are
 
-            x_rand = self.Sample(c_best, dist, x_center, C)
+            #x_rand = self.Sample(c_best, dist, x_center, C)
+            x_rand = self.Sample(c_best, dist, x_center)
             x_nearest = self.Nearest(self.V, x_rand)
             x_new = self.Steer(x_nearest, x_rand) #so that we only generate one new node, not multiple
             #if self.Cost(x_nearest) + self.Line(x_nearest, x_rand) + self.Line(x_rand, self.x_goal) > self.budget:
@@ -155,6 +163,8 @@ class IRrtStar:
         plt.pause(0.01)
         plt.show()
 
+        print("Total number of nodes: "+str(len(self.V)))
+
         fig, ax = plt.subplots()
         colormap = cm.Blues
         colormap.set_bad(color='black')
@@ -172,24 +182,27 @@ class IRrtStar:
         #node_start = the (potential) parent
         #currentinfopath = the infopath of the parent (node_start)
         #distance = the distance between the nodes (e.g. self.step_len or search_radius)
-        dt = 1 / (2 * distance)
-        t = 0
-        info = 0
-        infopath = []
-        if totalpath: #if we want to append the current path to the new path
-            for point in currentinfopath:
-                infopath.append(point)
 
-        while t < 1.0:
-            xline = node_end_x - node_start_x
-            yline = node_end_y - node_start_y
-            xpoint = math.floor(node_start_x + t * xline)
-            ypoint = math.floor(node_start_y + t * yline)
-            if [xpoint, ypoint] not in infopath:  # only info value when the point is not already monitored before
+        info = self.infomatrix[node_start_y * 100 + node_start_x][node_end_y * 100 + node_end_x]
+        infopath = self.infopathmatrix[node_start_y * 100 + node_start_x][node_end_y * 100 + node_end_x]
+        if info == None:
+            dt = 1 / (2 * distance)
+            t = 0
+            info = 0
+            infopath = []
+            while t < 1.0:
+                xline = node_end_x - node_start_x
+                yline = node_end_y - node_start_y
+                xpoint = math.floor(node_start_x + t * xline)
+                ypoint = math.floor(node_start_y + t * yline)
                 info += self.uncertaintymatrix[ypoint, xpoint]
                 infopath.append([xpoint, ypoint])
-            t += dt
+                t += dt
 
+            self.infomatrix[node_start_y * 100 + node_start_x][node_end_y * 100 + node_end_x] = info
+            self.infopathmatrix[node_start_y * 100 + node_start_x][node_end_y * 100 + node_end_x] = infopath
+        if totalpath: #if we want to append the current path to the new path
+            infopath=currentinfopath+infopath
         return infopath, info
     def Rewiring(self, x_near,x_new):
         c_near = x_near.cost
@@ -204,7 +217,7 @@ class IRrtStar:
         info_near = x_near.info
 
         info_new = info
-        if c_new < c_near and info_new>=info_near: #note: this is different than the condition in pruning
+        if c_new < c_near and info_new>=info_near and [self.x_start.x,self.x_start.y] in infopath: #note: this is different than the condition in pruning
             x_near.parent = x_new
             x_near.info = info_new
             x_near.cost = c_new
@@ -259,7 +272,9 @@ class IRrtStar:
                                                                     and not self.utils.is_collision(nodelist[ind], node))]
         return X_near
 
-    def Sample(self, c_max, c_min, x_center, C):
+#    def Sample(self, c_max, c_min, x_center, C):
+    def Sample(self, c_max, c_min, x_center): #TODO can we leave out this function?
+
         c_max=np.inf
         if c_max < np.inf:
             print("not random sampling")
@@ -270,7 +285,7 @@ class IRrtStar:
 
             while True:
                 x_ball = self.SampleUnitBall()
-                x_rand = np.dot(np.dot(C, L), x_ball) + x_center
+                #x_rand = np.dot(np.dot(C, L), x_ball) + x_center
                 if self.x_range[0] + self.delta <= x_rand[0] <= self.x_range[1] - self.delta and \
                         self.y_range[0] + self.delta <= x_rand[1] <= self.y_range[1] - self.delta:
                     break
@@ -288,8 +303,13 @@ class IRrtStar:
                 return np.array([[x], [y], [0.0]])
 
     def SampleFreeSpace(self):
-        return Node((np.random.random_integers(int(self.x_range[0]), int(self.x_range[1])),
-                     np.random.random_integers(int(self.y_range[0]),int(self.y_range[1]))))
+        xpoint = np.random.random_integers(int(self.x_range[0]), int(self.x_range[1]))
+        ypoint = np.random.random_integers(int(self.x_range[0]), int(self.x_range[1]))
+        # making sure we actually sample in the free space (and not in edge or obstacle):
+        while self.uncertaintymatrix[ypoint,xpoint]==np.nan:
+            xpoint = np.random.random_integers(int(self.x_range[0]), int(self.x_range[1]))
+            ypoint = np.random.random_integers(int(self.x_range[0]), int(self.x_range[1]))
+        return Node((xpoint,ypoint))
 
     def ExtractPath(self, node):
         print("Final cost: "+str(node.totalcost))
@@ -377,11 +397,21 @@ class IRrtStar:
         info+=node.parent.info
         return info
 
-    @staticmethod
-    def get_distance_and_angle(node_start, node_end):
-        dx = node_end.x - node_start.x
-        dy = node_end.y - node_start.y
-        return math.hypot(dx, dy), math.atan2(dy, dx)
+    #@staticmethod
+    def get_distance_and_angle(self,node_start, node_end):
+
+        distance = self.costmatrix[node_start.y*100+node_start.x][node_end.y*100+node_end.x]
+        angle = self.anglematrix[node_start.y*100+node_start.x][node_end.y*100+node_end.x]
+
+        if distance==None: # element is empty
+            dx = node_end.x - node_start.x
+            dy = node_end.y - node_start.y
+            [distance,angle] = math.hypot(dx, dy), math.atan2(dy, dx)
+            self.costmatrix[node_start.y*100+node_start.x][node_end.y*100+node_end.x]=distance
+            self.anglematrix[node_start.y*100+node_start.x][node_end.y*100+node_end.x]=angle
+
+            print("calculating distance for entry in matrix")
+        return distance, angle
 
     def animation(self, x_center=None, c_best=None, dist=None, theta=None):
         plt.cla()
@@ -390,9 +420,20 @@ class IRrtStar:
             'key_release_event',
             lambda event: [exit(0) if event.key == 'escape' else None])
 
+        # for node in self.V:
+        #     if node.parent:
+        #         plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-g")
         for node in self.V:
             if node.parent:
-                plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-g")
+                #reachedparent=False
+                prevpoint=[node.x,node.y]
+                for point in node.infopath[::-1]:
+                    reachedparent= (point[0]==node.parent.x and point[1]==node.parent.y)
+
+                    plt.plot([point[0], prevpoint[0]], [point[1], prevpoint[1]], "-g")
+                    prevpoint=point
+                    # if reachedparent:
+                    #     break
 
         if c_best != np.inf:
             self.draw_ellipse(x_center, c_best, dist, theta)
@@ -467,9 +508,9 @@ class IRrtStar:
 
 
 def main(uncertaintymatrix):
-    x_start = (18, 8)  # Starting node
+    x_start = (28, 8)  # Starting node
     #x_goal = (37, 18)  # Goal node
-    x_goal = (19,8)
+    x_goal = (28,8)
 
     rrt_star = IRrtStar(x_start, x_goal, 10, 0.0, 15, 2000,uncertaintymatrix)
     rrt_star.planning()
