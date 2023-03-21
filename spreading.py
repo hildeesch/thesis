@@ -17,7 +17,7 @@ def weedsspread(matrixstructure,matrixplants,weed,show=True):
     patchnr = weed.patchnr
     patchsize = weed.patchsize
     spreadrange = weed.spreadrange
-    spreadspeed = weed.spreadspeed
+    #spreadspeed = weed.spreadspeed
     plantattach = weed.plantattach
     saturation = weed.saturation
 
@@ -78,6 +78,7 @@ def uncertaintyweeds(matrixstructure,matrixplants,matrixweeds,weed,show=True):
                     within_radius=False
                     if np.sqrt(coldist ** 2 + rowdist ** 2) <= spreadrange:  # to enforce a radius
                         within_radius=True
+                        radius = np.sqrt(coldist ** 2 + rowdist ** 2)
                     matrixweeds_around = []
                     # the whole part with if-s is just to check whether the elements within the spreadrange are still within the field
                     row_min, row_max, col_min, col_max = 0, 0, 0, 0
@@ -91,28 +92,28 @@ def uncertaintyweeds(matrixstructure,matrixplants,matrixweeds,weed,show=True):
                         col_max = 1
                     if row_min == 0:
                         matrixweeds_around.append(
-                            matrixweeds[row - rowdist, col])  # left
+                            matrixweeds[row - rowdist, col]*(1/(1+rowdist)))  # left
                     if row_max == 0:
                         matrixweeds_around.append(
-                            matrixweeds[row + rowdist, col])  # right
+                            matrixweeds[row + rowdist, col]*(1/(1+rowdist)))  # right
                     if col_max == 0:
                         matrixweeds_around.append(
-                            matrixweeds[row, col + coldist])  # up
+                            matrixweeds[row, col + coldist]*(1/(1+coldist)))  # up
                     if col_min == 0:
                         matrixweeds_around.append(
-                            matrixweeds[row, col - coldist])  # down
+                            matrixweeds[row, col - coldist]*(1/(1+coldist)))  # down
                     if row_min == 0 and col_max == 0 and within_radius:
                         matrixweeds_around.append(
-                            matrixweeds[row - rowdist, col + coldist])  # left up
+                            matrixweeds[row - rowdist, col + coldist]*(1/(1+radius)))  # left up
                     if row_min == 0 and col_min == 0 and within_radius:
                         matrixweeds_around.append(
-                            matrixweeds[row - rowdist, col - coldist])  # left down
+                            matrixweeds[row - rowdist, col - coldist]*(1/(1+radius)))  # left down
                     if row_max == 0 and col_max == 0 and within_radius:
                         matrixweeds_around.append(
-                            matrixweeds[row + rowdist, col + coldist])  # right up
+                            matrixweeds[row + rowdist, col + coldist]*(1/(1+radius)))  # right up
                     if row_max == 0 and col_min == 0 and within_radius:
                         matrixweeds_around.append(
-                            matrixweeds[row + rowdist, col - coldist])  # right down
+                            matrixweeds[row + rowdist, col - coldist]*(1/(1+radius)))  # right down
 
             sumweedvalue = np.nansum(matrixweeds_around)
             sumweedvalue+=matrixweeds[row,col] # adding its own value
@@ -189,6 +190,7 @@ def pathogenspread(matrixstructure,matrixplants,pathogen,show=True):
                                 within_radius = False
                                 if np.sqrt(coldist ** 2 + rowdist ** 2) <= spreadrange:  # to enforce a radius
                                     within_radius = True
+                                    radius = np.sqrt(coldist ** 2 + rowdist ** 2)
                                 #matrixpathogen_around = []
                                 # the whole part with if-s is just to check whether the elements within the spreadrange are still within the field
                                 row_min, row_max, col_min, col_max = 0, 0, 0, 0
@@ -201,21 +203,21 @@ def pathogenspread(matrixstructure,matrixplants,pathogen,show=True):
                                 if col+coldist>99:
                                     col_max = 1
                                 if row_min==0:
-                                    matrixpathogen_around.append(pathogenmatrix[row-rowdist,col]) #left
+                                    matrixpathogen_around.append(pathogenmatrix[row-rowdist,col]*(1/(1+rowdist))) #left
                                 if row_max==0:
-                                    matrixpathogen_around.append(pathogenmatrix[row+rowdist,col]) #right
+                                    matrixpathogen_around.append(pathogenmatrix[row+rowdist,col]*(1/(1+rowdist))) #right
                                 if col_max==0:
-                                    matrixpathogen_around.append(pathogenmatrix[row,col+coldist]) #up
+                                    matrixpathogen_around.append(pathogenmatrix[row,col+coldist]*(1/(1+coldist))) #up
                                 if col_min==0:
-                                    matrixpathogen_around.append(pathogenmatrix[row,col-coldist]) #down
+                                    matrixpathogen_around.append(pathogenmatrix[row,col-coldist]*(1/(1+coldist))) #down
                                 if row_min==0 and col_max==0 and within_radius:
-                                    matrixpathogen_around.append(pathogenmatrix[row-rowdist,col+coldist]) #left up
+                                    matrixpathogen_around.append(pathogenmatrix[row-rowdist,col+coldist]*(1/(1+radius))) #left up
                                 if row_min==0 and col_min==0 and within_radius:
-                                    matrixpathogen_around.append(pathogenmatrix[row-rowdist,col-coldist]) #left down
+                                    matrixpathogen_around.append(pathogenmatrix[row-rowdist,col-coldist]*(1/(1+radius))) #left down
                                 if row_max == 0 and col_max == 0 and within_radius:
-                                    matrixpathogen_around.append(pathogenmatrix[row+rowdist,col+coldist]) #right up
+                                    matrixpathogen_around.append(pathogenmatrix[row+rowdist,col+coldist]*(1/(1+radius))) #right up
                                 if row_max == 0 and col_min == 0 and within_radius:
-                                    matrixpathogen_around.append(pathogenmatrix[row+rowdist,col-coldist]) #right down
+                                    matrixpathogen_around.append(pathogenmatrix[row+rowdist,col-coldist]*(1/(1+radius))) #right down
 
                         # the pathogen value is only increased if it is part of the field (not edge/obstacle) and it has not reached the max value yet
                         if not np.isnan(matrixstructure[row,col]) and pathogenmatrix[row,col]<saturation:
@@ -269,6 +271,7 @@ def uncertaintypathogen(matrixstructure,matrixplants,matrixpathogen,pathogen,sho
                     within_radius = False
                     if np.sqrt(coldist ** 2 + rowdist ** 2) <= spreadrange:  # to enforce a radius
                         within_radius = True
+                        radius = np.sqrt(coldist ** 2 + rowdist ** 2)
                     # the whole part with if-s is just to check whether the elements within the spreadrange are still within the field
                     row_min, row_max, col_min, col_max = 0, 0, 0, 0
                     if row-rowdist<0:
@@ -280,21 +283,21 @@ def uncertaintypathogen(matrixstructure,matrixplants,matrixpathogen,pathogen,sho
                     if col+coldist>99:
                         col_max = 1
                     if row_min==0:
-                        matrixpathogen_around.append(matrixpathogen[row-rowdist,col]) #left
+                        matrixpathogen_around.append(matrixpathogen[row-rowdist,col]*(1/(1+rowdist))) #left
                     if row_max==0:
-                        matrixpathogen_around.append(matrixpathogen[row+rowdist,col]) #right
+                        matrixpathogen_around.append(matrixpathogen[row+rowdist,col]*(1/(1+rowdist))) #right
                     if col_max==0:
-                        matrixpathogen_around.append(matrixpathogen[row,col+coldist]) #up
+                        matrixpathogen_around.append(matrixpathogen[row,col+coldist]*(1/(1+coldist))) #up
                     if col_min==0:
-                        matrixpathogen_around.append(matrixpathogen[row,col-coldist]) #down
+                        matrixpathogen_around.append(matrixpathogen[row,col-coldist]*(1/(1+coldist))) #down
                     if row_min==0 and col_max==0 and within_radius:
-                        matrixpathogen_around.append(matrixpathogen[row-rowdist,col+coldist]) #left up
+                        matrixpathogen_around.append(matrixpathogen[row-rowdist,col+coldist]*(1/(1+radius))) #left up
                     if row_min==0 and col_min==0 and within_radius:
-                        matrixpathogen_around.append(matrixpathogen[row-rowdist,col-coldist]) #left down
+                        matrixpathogen_around.append(matrixpathogen[row-rowdist,col-coldist]*(1/(1+radius))) #left down
                     if row_max == 0 and col_max == 0 and within_radius:
-                        matrixpathogen_around.append(matrixpathogen[row+rowdist,col+coldist]) #right up
+                        matrixpathogen_around.append(matrixpathogen[row+rowdist,col+coldist]*(1/(1+radius))) #right up
                     if row_max == 0 and col_min == 0 and within_radius:
-                        matrixpathogen_around.append(matrixpathogen[row+rowdist,col-coldist]) #right down
+                        matrixpathogen_around.append(matrixpathogen[row+rowdist,col-coldist]*(1/(1+radius))) #right down
 
             # the pathogen value is only increased if it is part of the field (not edge/obstacle) and it has not reached the max value yet
             if not np.isnan(matrixstructure[row, col]):

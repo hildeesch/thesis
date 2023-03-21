@@ -89,11 +89,11 @@ def print_hi(name):
     #show_map(matrix_nonconvex)
     #heat_matrix = withrows(matrix_square,2,4,True)
 
-    pathogen1 = Pathogen(patchnr=2,infectionduration=3,spreadrange=5, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.1, saturation=5)
+    #pathogen1 = Pathogen(patchnr=2,infectionduration=4,spreadrange=10, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.1, saturation=5)
     #pathogen1 = Pathogen(patchnr=1,infectionduration=6,spreadrange=6, reproductionfraction=0.5, reproductionrate=0.2, standarddeviation=0.01, saturation=3) # one big patch
     #spread_matrix, uncertainty_matrix = pathogenspread(field_matrix,heat_matrix,pathogen1, True)
-    #weed1 = Weed(patchnr=4,patchsize=7,spreadrange=3,reproductionrate=1,standarddeviation=0.01, saturation=3,plantattach=False)
-    #spread_matrix,uncertainty_matrix = weedsspread(field_matrix,heat_matrix,weed1, False)
+    #weed1 = Weed(patchnr=4,patchsize=7,spreadrange=3,reproductionrate=2,standarddeviation=1, saturation=1,plantattach=False)
+    #spread_matrix,uncertainty_matrix = weedsspread(field_matrix,heat_matrix,weed1, True)
     del heat_matrix
     #del spread_matrix #to save memory
     #np.save('uncertainty_matrixfile.npy',uncertainty_matrix)
@@ -116,7 +116,7 @@ def print_hi(name):
     time_total = time_end-time_start
     print("Time taken = "+str(time_total)+" seconds. This is more than "+str(time_total//60)+" minutes")
 
-    showpath(uncertainty_matrix,finalpath,finalcost,finalinfo,budget, steplength, searchradius, iteration,True,False)
+    showpath(uncertainty_matrix,finalpath,finalcost,finalinfo,budget, steplength, searchradius, iteration,True,True)
 
 
 if __name__ == '__main__':

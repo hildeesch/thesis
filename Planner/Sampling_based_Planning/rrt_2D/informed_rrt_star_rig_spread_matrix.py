@@ -16,7 +16,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)) +
                 "/../../Sampling_based_Planning/")
 from matplotlib import cm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-
+import time
 
 #from Sampling_based_Planning.rrt_2D import env, plotting, utils
 from Planner.Sampling_based_Planning.rrt_2D import env, plotting, utils
@@ -60,12 +60,15 @@ class IRrtStar:
         self.X_soln = set()
         self.path = None
 
-        self.budget=200
+        self.budget=300
         self.uncertaintymatrix = uncertaintymatrix
         self.costmatrix = np.empty((100*100,100*100) )
         self.anglematrix = np.empty((100*100,100*100) )
         self.infopathmatrix = np.empty((100*100,100*100),dtype = object )
         self.infomatrix = np.empty((100*100,100*100) )
+
+        self.time = np.zeros(7) # for debugging
+        # 0 = sample, 1 = nearest, 2 = steer, 3 = near, 4 = rewiring, 5 = lastpath, 6 = pruning
 
 
     def init(self):
@@ -79,7 +82,7 @@ class IRrtStar:
         return x_best
 
     def planning(self):
-        show = True
+        show = False
         #theta, dist, x_center, C, x_best = self.init()
         x_best = self.init()
         c_best = np.inf
@@ -110,9 +113,18 @@ class IRrtStar:
 
             #x_rand = self.Sample(c_best, dist, x_center, C)
             #x_rand = self.Sample(c_best, dist, x_center)
+            timestart=time.time()
             x_rand = self.Sample()
+            timeend=time.time()
+            self.time[0]+=(timeend-timestart)
+            timestart=time.time()
             x_nearest = self.Nearest(self.V, x_rand)
+            timeend = time.time()
+            self.time[1] += (timeend - timestart)
+            timestart=time.time()
             x_new = self.Steer(x_nearest, x_rand) #so that we only generate one new node, not multiple
+            timeend = time.time()
+            self.time[2] += (timeend - timestart)
             #if self.Cost(x_nearest) + self.Line(x_nearest, x_rand) + self.Line(x_rand, self.x_goal) > self.budget:
                 #just for debugging purposes (for now)
                 #print("Past the budget")
@@ -143,21 +155,31 @@ class IRrtStar:
                             self.V.append(node_new) #generate a "node"/trajectory to each near point
 
                             # rewire
-                            # for x_near in self.Near(self.V,x_new,self.search_radius):
-                            #    self.Rewiring(x_near,node_new)
+                            for x_near in self.Near(self.V,x_new,self.search_radius):
+                                timestart=time.time()
+                                self.Rewiring(x_near,node_new)
+                                timeend = time.time()
+                                self.time[4] += (timeend - timestart)
 
 
                             if self.InGoalRegion(node_new):
                                 if not self.utils.is_collision(node_new, self.x_goal):
                                     self.X_soln.add(node_new)
+                                    timestart=time.time()
                                     self.LastPath(node_new)
+                                    timeend = time.time()
+                                    self.time[5] += (timeend - timestart)
 
                 #print("node_new: ("+str(node_new.x)+","+str(node_new.y)+")")
                 if node_new!=[]: # so it has actually been assigned
+                    timestart=time.time()
                     self.Pruning(node_new)
+                    timeend = time.time()
+                    self.time[6] += (timeend - timestart)
 
-            if k % 30 == 0 and show:
+            if k % 20 == 0 and show:
                 self.animation()
+                print(self.time)
 
         self.path = self.ExtractPath(x_best)
         #for point in reversed(x_best.infopath):
@@ -366,11 +388,14 @@ class IRrtStar:
         return node_new
 
     def Near(self, nodelist, node, max_dist=0):
+        timestart=time.time()
         if max_dist==0:
             max_dist = self.step_len
         dist_table = [self.get_distance_and_angle(nd, node)[0] for nd in nodelist]
         X_near = [nodelist[ind] for ind in range(len(dist_table)) if (dist_table[ind] <= max_dist and dist_table[ind] > 0.0
                                                                     and not self.utils.is_collision(nodelist[ind], node))]
+        timeend = time.time()
+        self.time[3] += (timeend - timestart)
         return X_near
 
 #    def Sample(self, c_max, c_min, x_center, C):
