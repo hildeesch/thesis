@@ -60,15 +60,18 @@ class IRrtStar:
         self.X_soln = set()
         self.path = None
 
-        self.budget=300
+        self.reductioncount = 0 # to count the shortening of range in Near()
+        self.reduction = 0
+
+        self.budget=200
         self.uncertaintymatrix = uncertaintymatrix
         self.costmatrix = np.empty((100*100,100*100) )
         self.anglematrix = np.empty((100*100,100*100) )
         self.infopathmatrix = np.empty((100*100,100*100),dtype = object )
         self.infomatrix = np.empty((100*100,100*100) )
 
-        self.time = np.zeros(7) # for debugging
-        # 0 = sample, 1 = nearest, 2 = steer, 3 = near, 4 = rewiring, 5 = lastpath, 6 = pruning
+        self.time = np.zeros(8) # for debugging
+        # 0 = sample, 1 = nearest, 2 = steer, 3 = near, 4 = rewiring, 5 = lastpath, 6 = pruning, 7 = totaltime
 
 
     def init(self):
@@ -82,12 +85,14 @@ class IRrtStar:
         return x_best
 
     def planning(self):
-        show = False
+        show = True
         #theta, dist, x_center, C, x_best = self.init()
         x_best = self.init()
         c_best = np.inf
         count_down=20
         i_best = 0.001
+        totalstarttime=time.time()
+        startlen=0 # for checking node increase
         for k in range(self.iter_max):
             #time.sleep(0.1)
             if k>=100-3: #only evaluate from when we might want it to stop #TODO make 400 a variable
@@ -104,13 +109,19 @@ class IRrtStar:
                 else:
                     count_down=20 #reset
                     print("reset countdown")
+            if k==101: # to test up to certain iteration
+                count_down=0
             if count_down<=0 and k>100:
                 print("Reached stopping criterion at iteration "+str(k))
                 break # we stop iterating if the best score is not improving much anymore and we already passed at least ... cycles
 
             if k%50==0:
                 print("ATTENTION!!! ATTENTION!!! ATTENTION!!! AGAIN FIFTY CYCLES FURTHER, CURRENT CYCLE ="+str(k)) # to know how far we are
-
+            endlen=len(self.V)
+            print("Nr of nodes added: "+str(endlen-startlen))
+            if (endlen-startlen)==0:
+                print("Len X_Near was: "+str(len(self.Near(self.V,x_new))))
+            startlen = len(self.V)
             #x_rand = self.Sample(c_best, dist, x_center, C)
             #x_rand = self.Sample(c_best, dist, x_center)
             timestart=time.time()
@@ -132,7 +143,7 @@ class IRrtStar:
             for node in self.V:
                 if node.x == x_new.x and node.y == x_new.y:  # co-located nodes
                     double=True #there is already a node at this location, so we skip it
-                    # print("double")
+                    print("double")
                     break
             #if x_nearest.cost + self.Line(x_nearest, x_new) + self.Line(x_new, self.x_goal) < self.budget and not double:  # budget check for nearest parent (to make it more efficient)
             if not double:  # budget check for nearest parent (to make it more efficient)
@@ -179,6 +190,7 @@ class IRrtStar:
 
             if k % 20 == 0 and show:
                 self.animation()
+                self.time[7] = time.time()-totalstarttime
                 print(self.time)
 
         self.path = self.ExtractPath(x_best)
@@ -346,7 +358,8 @@ class IRrtStar:
         for index, node1 in enumerate(nodelist):
             for index2,node2 in enumerate(nodelist):
                 #if (node2.cost<=node1.cost and node2.info>node1.info): #prune lesser paths or doubles
-                if (node2.cost<=node1.cost and node2.info>node1.info) or (node1.parent==node2.parent and index!=index2): #prune lesser paths or doubles
+                if (node2.cost<=node1.cost and node2.info>node1.info) or (node2.cost<node1.cost and node2.info==node1.info) or (node1.parent==node2.parent and index!=index2): #prune lesser paths or doubles
+                #if (node2.cost <= node1.cost and node2.info > node1.info) or (node1.parent == node2.parent and index != index2):  # prune lesser paths or doubles
                     if (node1.cost==node2.cost and node1.info==node2.info and index!=index2 and node1.parent==node2.parent):
                         print("Double detected, now pruned")
                         # print("node 1 =("+str(node1.x)+","+str(node1.y)+") parent =("+str(node1.parent.x)+","+str(node1.parent.y)+")")
@@ -374,14 +387,14 @@ class IRrtStar:
 
     def Steer(self, x_start, x_goal):
         dist, theta = self.get_distance_and_angle(x_start, x_goal)
-        dist = min(self.step_len, dist)
+        dist = min(self.step_len-self.reduction, dist)
         notfinished=True
         while notfinished and dist>=0:
             node_new = Node((math.floor(x_start.x + dist * math.cos(theta)),
                              math.floor(x_start.y + dist * math.sin(theta))))
             if not np.isnan(self.uncertaintymatrix[node_new.y,node_new.x]) and self.Line(x_start,node_new)<=self.step_len:
                 dist = self.Line(x_start,node_new)
-                notfinished=False # to prevent sampling in obstacle and sampling to far due to rounding
+                notfinished=False # to prevent sampling in obstacle and sampling too far due to rounding
             dist-=1
         #node_new.parent = x_start
         print("nearest=("+str(x_start.x)+","+str(x_start.y)+") - x_rand=("+str(x_goal.x)+","+str(x_goal.y)+") - dist = "+str(dist+1)+" - x_new=("+str(node_new.x)+","+str(node_new.y)+")")
@@ -391,11 +404,22 @@ class IRrtStar:
         timestart=time.time()
         if max_dist==0:
             max_dist = self.step_len
+        if max_dist==self.step_len or max_dist==self.search_radius:
+            max_dist-=self.reduction
         dist_table = [self.get_distance_and_angle(nd, node)[0] for nd in nodelist]
         X_near = [nodelist[ind] for ind in range(len(dist_table)) if (dist_table[ind] <= max_dist and dist_table[ind] > 0.0
                                                                     and not self.utils.is_collision(nodelist[ind], node))]
         timeend = time.time()
         self.time[3] += (timeend - timestart)
+        if len(X_near)>500 and max_dist>=5:
+            self.reductioncount+=1
+            print("Shortening the range for Near: "+str(max_dist-1))
+            #print("Current step length ="+str(self.step_len-self.reduction))
+            if self.reductioncount==1000 and (self.step_len-self.reduction>=5):
+                self.reductioncount=0
+                self.reduction+=1
+                print("Range is reducted by "+str(self.reduction))
+            return self.Near(nodelist,node,max_dist-1)
         return X_near
 
 #    def Sample(self, c_max, c_min, x_center, C):
@@ -639,7 +663,7 @@ def main(uncertaintymatrix):
     #x_goal = (37, 18)  # Goal node
     x_goal = (50,50)
 
-    rrt_star = IRrtStar(x_start, x_goal, 5, 0.0, 10, 2000,uncertaintymatrix)
+    rrt_star = IRrtStar(x_start, x_goal, 15, 0.0, 15, 2000,uncertaintymatrix)
     [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration]=rrt_star.planning()
 
     return finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration

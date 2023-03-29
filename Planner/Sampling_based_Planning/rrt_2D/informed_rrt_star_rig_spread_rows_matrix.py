@@ -79,6 +79,9 @@ class IRrtStar:
         self.X_soln = set()
         self.path = None
 
+        self.reductioncount = 0 # to count the shortening of range in Near()
+        self.reduction = 0
+
         self.budget=250
         self.uncertaintymatrix = uncertaintymatrix
         self.row_nrs = row_nrs
@@ -102,8 +105,8 @@ class IRrtStar:
 
         self.rowdist=4
 
-        self.time = np.zeros(7) # for debugging
-        # 0 = sample, 1 = nearest, 2 = steer, 3 = near, 4 = rewiring, 5 = lastpath, 6 = pruning
+        self.time = np.zeros(8) # for debugging
+        # 0 = sample, 1 = nearest, 2 = steer, 3 = near, 4 = rewiring, 5 = lastpath, 6 = pruning, 7 = total time
 
         self.maze = np.ones((100,100) ) # for A star
 
@@ -141,9 +144,11 @@ class IRrtStar:
         count_down=3
         i_best = 0
         startlen=0 # for checking node increase
+        totalstarttime=time.time()
         for k in range(self.iter_max):
             #time.sleep(0.1)
             if k>=150-3: #only evaluate from when we might want it to stop
+                #print("Start countdown")
                 cost = {node: node.totalcost for node in self.X_soln}
                 info = {node: node.totalinfo for node in self.X_soln}
                 #x_best = min(cost, key=cost.get)
@@ -163,7 +168,9 @@ class IRrtStar:
 
             if k%50==0:
                 print("ATTENTION!!! ATTENTION!!! ATTENTION!!! AGAIN FIFTY CYCLES FURTHER, CURRENT CYCLE ="+str(k)) # to know how far we are
-
+            endlen=len(self.V)
+            print("Nr of nodes added: "+str(endlen-startlen))
+            startlen = len(self.V)
             #x_rand = self.Sample(c_best, dist, x_center, C)
             timestart = time.time()
             x_rand = self.Sample()
@@ -181,9 +188,6 @@ class IRrtStar:
                 #just for debugging purposes (for now)
                 #print("Past the budget")
             double=False
-            endlen=len(self.V)
-            print("Nr of nodes added: "+str(endlen-startlen))
-            startlen = len(self.V)
             for node in self.V:
                 if node.x == x_new.x and node.y == x_new.y:  # co-located nodes
                     double=True #there is already a node at this location, so we skip it
@@ -227,6 +231,7 @@ class IRrtStar:
 
             if k % 10 == 0 and show:
                 self.animation()
+                self.time[7] = time.time()-totalstarttime
                 print(self.time)
 
         self.path = self.ExtractPath(x_best)
@@ -565,6 +570,7 @@ class IRrtStar:
 
         info = self.infomatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x]
         infopath = self.infopathmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x]
+        #if not cost or (not info):
         if not cost or (not info and not costOnly):
             #print("cost: "+str(cost)+" costonly: "+str(costOnly))
             info=0
@@ -611,20 +617,20 @@ class IRrtStar:
             self.infopathmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = infopath
             self.infopathmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = infopath[::-1]
 
-            # for index, infopoint in enumerate(infopath):
-            #     if infopoint[1]==node_start_y:
-            #         self.costmatrix[infopoint[1]*100+infopoint[0], node_end_y*100 + node_end_x] = cost-index
-            #         self.costmatrix[node_end_y * 100 + node_end_x,infopoint[1]*100+infopoint[0]] = cost-index
-            #
-            #     else:
-            #         break;
-            # for index, infopoint in enumerate(infopath[::-1]):
-            #     if infopoint[1]==node_end_y:
-            #         self.costmatrix[infopoint[1]*100+infopoint[0], node_start_y*100 + node_start_x] = cost-index
-            #         self.costmatrix[node_start_y * 100 + node_start_x,infopoint[1]*100+infopoint[0]] = cost-index
-            #
-            #     else:
-            #         break;
+            for index, infopoint in enumerate(infopath):
+                if infopoint[1]==node_start_y:
+                    self.costmatrix[infopoint[1]*100+infopoint[0], node_end_y*100 + node_end_x] = cost-index
+                    self.costmatrix[node_end_y * 100 + node_end_x,infopoint[1]*100+infopoint[0]] = cost-index
+
+                else:
+                    break;
+            for index, infopoint in enumerate(infopath[::-1]):
+                if infopoint[1]==node_end_y:
+                    self.costmatrix[infopoint[1]*100+infopoint[0], node_start_y*100 + node_start_x] = cost-index
+                    self.costmatrix[node_start_y * 100 + node_start_x,infopoint[1]*100+infopoint[0]] = cost-index
+
+                else:
+                    break;
         # else:
         #     print("reusing known costs")
         if costOnly:
@@ -907,10 +913,11 @@ class IRrtStar:
                     #     print("Alternative pruned")
                     # prune the node from all nodes
                     nochildren = True
-                    for allnode in self.V:
+                    for allnode in self.V[::-1]:
                         if allnode.parent == node1:  # in this case we can't prune the node because other nodes depend on it
                             nochildren = False
                             print("!!!Node not pruned because it has children")
+                            break;
                     if nochildren:
                         if node1 in self.V: #still have to figure out why this is needed (TODO)
                             self.V.remove(node1)
@@ -1122,6 +1129,7 @@ class IRrtStar:
         timestart=time.time()
         if max_dist==0:
             max_dist = self.step_len
+        #max_dist-=self.reduction
         #heuristic:
         nodelist_new = nodelist[:]
         for nd in nodelist: #TODO check if this actually speeds things up
@@ -1134,6 +1142,14 @@ class IRrtStar:
         #print("number of near nodes: "+str(len(X_near)))
         timeend = time.time()
         self.time[3] += (timeend - timestart)
+        # if len(X_near)>500 and max_dist>=5:
+        #     self.reductioncount+=1
+        #     print("Shortening the range for Near: "+str(max_dist-1))
+        #     if self.reductioncount==1000:
+        #         self.reductioncount=0
+        #         self.reduction+=1
+        #         print("Range is reducted by "+str(self.reduction))
+        #     return self.Near(nodelist,node,max_dist-1)
         return X_near
 
     #def Sample(self, c_max, c_min, x_center, C):

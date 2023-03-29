@@ -90,24 +90,27 @@ def print_hi(name):
     #heat_matrix = withrows(matrix_square,2,4,True)
 
     #pathogen1 = Pathogen(patchnr=2,infectionduration=4,spreadrange=10, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.1, saturation=5)
-    #pathogen1 = Pathogen(patchnr=1,infectionduration=6,spreadrange=6, reproductionfraction=0.5, reproductionrate=0.2, standarddeviation=0.01, saturation=3) # one big patch
-    #spread_matrix, uncertainty_matrix = pathogenspread(field_matrix,heat_matrix,pathogen1, True)
+    pathogen1 = Pathogen(patchnr=1,infectionduration=6,spreadrange=6, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.1, saturation=3) # one big patch
+    #spread_matrix, uncertainty_matrix = pathogenspread(field_matrix,heat_matrix,pathogen1, False)
     #weed1 = Weed(patchnr=4,patchsize=7,spreadrange=3,reproductionrate=2,standarddeviation=1, saturation=1,plantattach=False)
     #spread_matrix,uncertainty_matrix = weedsspread(field_matrix,heat_matrix,weed1, True)
     del heat_matrix
     #del spread_matrix #to save memory
     #np.save('uncertainty_matrixfile.npy',uncertainty_matrix)
-
+    #np.save('uncertainty_matrixfile_small.npy', uncertainty_matrix)
     #uncertainty_matrix= np.load('uncertainty_matrixfile.npy')
+    uncertainty_matrix= np.load('uncertainty_matrixfile_small.npy')
+    #uncertainty_matrix[uncertainty_matrix==0]=0.01 # little bit of uncertainty all over the map
 
-    #uniform matrix:
-    uncertainty_matrix=deepcopy(field_matrix)
-    uncertainty_matrix[uncertainty_matrix==0.5]=0
-    (uncertainty_matrix[:,0:50])[uncertainty_matrix[:,0:50]==0]=0.5
+    #half uniform matrix:
+    #uncertainty_matrix=deepcopy(field_matrix)
+    #uncertainty_matrix[uncertainty_matrix==0.5]=0
+    #(uncertainty_matrix[:,0:50])[uncertainty_matrix[:,0:50]==0]=0.5
 
+    show_map(uncertainty_matrix)
     #rig(uncertainty_matrix)
-    #[finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix)
-    [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_rows_matrix(uncertainty_matrix,row_nrs,row_edges)
+    [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix)
+    #[finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_rows_matrix(uncertainty_matrix,row_nrs,row_edges)
     #rig_rows(uncertainty_matrix)
     #rig_rows_v2(uncertainty_matrix,row_nrs,row_edges)
     #print("sum entropy = "+str(np.nansum(uncertainty_matrix)))
