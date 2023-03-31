@@ -147,7 +147,7 @@ class IRrtStar:
         totalstarttime=time.time()
         for k in range(self.iter_max):
             #time.sleep(0.1)
-            if k>=150-3: #only evaluate from when we might want it to stop
+            if k>=300-3: #only evaluate from when we might want it to stop
                 #print("Start countdown")
                 cost = {node: node.totalcost for node in self.X_soln}
                 info = {node: node.totalinfo for node in self.X_soln}
@@ -156,12 +156,12 @@ class IRrtStar:
                 #c_best = cost[x_best]
                 i_last_best = i_best
                 i_best = info[x_best]
-                if i_last_best>0: # to prevent division by zero
-                    if ((i_best-i_last_best)/i_last_best)<0.01: #smaller than 1% improvement
-                        count_down-=1
-                    else:
-                        count_down=10 #reset
-                        print("Reset countdown")
+                #if i_last_best>0: # to prevent division by zero
+                if ((i_best-i_last_best)/i_last_best)<0.01: #smaller than 1% improvement
+                    count_down-=1
+                else:
+                    count_down=10 #reset
+                    print("Reset countdown")
             if count_down<=0 and k>150:
                 print("Reached stopping criterion at iteration "+str(k))
                 break # we stop iterating if the best score is not improving much anymore and we already passed at least ... cycles
@@ -906,7 +906,8 @@ class IRrtStar:
         # now the pruning
         for index, node1 in enumerate(nodelist):
             for index2,node2 in enumerate(nodelist):
-                if (node2.cost<=node1.cost and node2.info>node1.info) or (node1.parent==node2.parent and index!=index2): #prune lesser paths or doubles
+                if (node2.cost<=node1.cost and node2.info>node1.info) or (node2.cost<node1.cost and node2.info==node1.info) or (node1.parent==node2.parent and index!=index2): #prune lesser paths or doubles
+                #if (node2.cost<=node1.cost and node2.info>node1.info) or (node1.parent==node2.parent and index!=index2): #prune lesser paths or doubles
                     # if (node1.cost==node2.cost and node1.info==node2.info and index!=index2):
                     #     print("Double detected, now pruned")
                     # else:
@@ -938,7 +939,8 @@ class IRrtStar:
         # if dist>self.step_len:
         #     #just for now for debugging purposes
         #     closer=True
-        if dist<=self.step_len:
+        maxdist = self.step_len-self.reduction
+        if dist<=maxdist:
             #print("x_rand close enough, x_rand = x_new --> x_rand=("+str(x_goal.x)+","+str(x_goal.y)+")")
             print("nearest=(" + str(x_start.x) + "," + str(x_start.y) + ") - x_rand=(" + str(x_goal.x) + "," + str(
                 x_goal.y) + ") - dist = " + str(dist) + " - x_new=(" + str(x_goal.x) + "," + str(
@@ -956,7 +958,7 @@ class IRrtStar:
         #sampling within the end row
         withinbounds=True
         distance=5
-        while withinbounds and dist>self.step_len:
+        while withinbounds and dist>maxdist:
             if boolright==1:
                 xpoint = x_goal.x+distance
                 ypoint = self.row_nrs[self.row_nrs.index(x_goal.y)]
@@ -977,7 +979,7 @@ class IRrtStar:
             distance+=5
 
         index = self.row_nrs.index(x_goal.y)
-        while dist>self.step_len:
+        while dist>maxdist:
             xpoint = self.row_edges[index][boolright]
             ypoint = self.row_nrs[index]
             dist= self.FindCostInfoA(xpoint,ypoint, x_start.x, x_start.y,
@@ -1008,10 +1010,10 @@ class IRrtStar:
         #     dist = self.FindCostInfo(self.row_edges[self.row_nrs.index(x_start.y)][1], x_start.y, x_start.x, x_start.y, x_start.infopath, False, True)
         #     xpoint=self.row_edges[self.row_nrs.index(x_start.y)][1]
         #     ypoint=x_start.y
-        if dist>self.step_len:
-            xpoint=random.choice([x_start.x-self.step_len,x_start.x+self.step_len])
+        if dist>maxdist:
+            xpoint=random.choice([x_start.x-maxdist,x_start.x+maxdist])
             ypoint=x_start.y
-            dist=self.step_len
+            dist=maxdist
             print("last resort sampling: in own row")
         #node_new.parent = x_start
         #print("WE NEED TO SAMPLE CLOSER TO THE NEAREST: ("+str(x_start.x)+","+str(x_start.y)+")")
@@ -1129,6 +1131,8 @@ class IRrtStar:
         timestart=time.time()
         if max_dist==0:
             max_dist = self.step_len
+        if max_dist==self.step_len or max_dist==self.search_radius:
+            max_dist-=self.reduction
         #max_dist-=self.reduction
         #heuristic:
         nodelist_new = nodelist[:]
@@ -1142,14 +1146,14 @@ class IRrtStar:
         #print("number of near nodes: "+str(len(X_near)))
         timeend = time.time()
         self.time[3] += (timeend - timestart)
-        # if len(X_near)>500 and max_dist>=5:
-        #     self.reductioncount+=1
-        #     print("Shortening the range for Near: "+str(max_dist-1))
-        #     if self.reductioncount==1000:
-        #         self.reductioncount=0
-        #         self.reduction+=1
-        #         print("Range is reducted by "+str(self.reduction))
-        #     return self.Near(nodelist,node,max_dist-1)
+        if len(X_near)>500 and max_dist>=5:
+            self.reductioncount+=1
+            #print("Shortening the range for Near: "+str(max_dist-1))
+            if self.reductioncount==1000:
+                self.reductioncount=0
+                self.reduction+=1
+                print("Range is reducted by "+str(self.reduction))
+            return self.Near(nodelist,node,max_dist-1)
         return X_near
 
     #def Sample(self, c_max, c_min, x_center, C):

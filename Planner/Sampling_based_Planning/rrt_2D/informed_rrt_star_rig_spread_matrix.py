@@ -20,6 +20,7 @@ import time
 
 #from Sampling_based_Planning.rrt_2D import env, plotting, utils
 from Planner.Sampling_based_Planning.rrt_2D import env, plotting, utils
+from Planner.Sampling_based_Planning.rrt_2D import dubins_path as dubins
 
 class Node:
     def __init__(self, n):
@@ -119,8 +120,8 @@ class IRrtStar:
                 print("ATTENTION!!! ATTENTION!!! ATTENTION!!! AGAIN FIFTY CYCLES FURTHER, CURRENT CYCLE ="+str(k)) # to know how far we are
             endlen=len(self.V)
             print("Nr of nodes added: "+str(endlen-startlen))
-            if (endlen-startlen)==0:
-                print("Len X_Near was: "+str(len(self.Near(self.V,x_new))))
+            # if (endlen-startlen)==0:
+            #     print("Len X_Near was: "+str(len(self.Near(self.V,x_new))))
             startlen = len(self.V)
             #x_rand = self.Sample(c_best, dist, x_center, C)
             #x_rand = self.Sample(c_best, dist, x_center)
@@ -233,6 +234,7 @@ class IRrtStar:
 
         if show:
             self.animation()
+            plt.plot(x_best.x, x_best.y, "bs", linewidth=3)
             plt.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
             #plt.plot([x for x, _ in x_best.infopath], [y for _, y in x_best.infopath], '-b')
             #plt.plot([x for x, _ in x_best.lastinfopath], [y for _, y in x_best.lastinfopath], '-c')
@@ -392,7 +394,7 @@ class IRrtStar:
         while notfinished and dist>=0:
             node_new = Node((math.floor(x_start.x + dist * math.cos(theta)),
                              math.floor(x_start.y + dist * math.sin(theta))))
-            if not np.isnan(self.uncertaintymatrix[node_new.y,node_new.x]) and self.Line(x_start,node_new)<=self.step_len:
+            if not np.isnan(self.uncertaintymatrix[node_new.y,node_new.x]) and self.Line(x_start,node_new)<=(self.step_len-self.reduction):
                 dist = self.Line(x_start,node_new)
                 notfinished=False # to prevent sampling in obstacle and sampling too far due to rounding
             dist-=1
@@ -406,14 +408,14 @@ class IRrtStar:
             max_dist = self.step_len
         if max_dist==self.step_len or max_dist==self.search_radius:
             max_dist-=self.reduction
-        dist_table = [self.get_distance_and_angle(nd, node)[0] for nd in nodelist]
+        dist_table = [self.get_distance_and_angle(nd,node)[0] for nd in nodelist]
         X_near = [nodelist[ind] for ind in range(len(dist_table)) if (dist_table[ind] <= max_dist and dist_table[ind] > 0.0
                                                                     and not self.utils.is_collision(nodelist[ind], node))]
         timeend = time.time()
         self.time[3] += (timeend - timestart)
         if len(X_near)>500 and max_dist>=5:
             self.reductioncount+=1
-            print("Shortening the range for Near: "+str(max_dist-1))
+            #print("Shortening the range for Near: "+str(max_dist-1))
             #print("Current step length ="+str(self.step_len-self.reduction))
             if self.reductioncount==1000 and (self.step_len-self.reduction>=5):
                 self.reductioncount=0
@@ -448,13 +450,61 @@ class IRrtStar:
     def ExtractPath(self, node):
         print("Final cost: "+str(node.totalcost))
         print("Final info value: "+str(node.totalinfo))
-        path = [[self.x_goal.x, self.x_goal.y]]
+        #path = [[self.x_goal.x, self.x_goal.y]]
+        # while node.parent:
+        #     path.append([node.x, node.y])
+        #     node = node.parent
+        # path.append([node.x,node.y]) # this should be the start
 
-        while node.parent:
-            path.append([node.x, node.y])
+
+
+        path = []
+        maxc = 2
+
+
+        sx = self.x_goal.x
+        sy = self.x_goal.y
+        syaw = self.anglematrix[node.y * 100 + node.x, self.x_goal.y * 100 + self.x_goal.x]+math.pi
+        gx = node.x
+        gy = node.y
+        gyaw = self.anglematrix[node.parent.y*100 + node.parent.x,node.y * 100 + node.x]+math.pi
+        dubinspath = dubins.calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, maxc)
+        for i in range((len(dubinspath.x))):
+            pathpart = []
+            pathpart.append([dubinspath.x[i], dubinspath.y[i]])
+            path.extend(pathpart[::-1])
+
+        # gx = node.parent.x
+        # gy = node.parent.y
+        # gyaw = self.anglematrix[(node.parent).parent.y * 100 + (node.parent).parent.x, node.parent.y * 100 + node.parent.x] + math.pi
+        node=node.parent
+        last= False
+        while node.parent or last:
+            sx = gx
+            sy = gy
+            syaw=gyaw
+            gx = node.x
+            gy= node.y
+            if not last:
+                gyaw = self.anglematrix[node.parent.y*100 + node.parent.x,node.y * 100 + node.x] + math.pi
+            else:
+                gyaw = syaw
+            print(gyaw)
+
+            dubinspath = dubins.calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, maxc)
+            for i in range((len(dubinspath.x))):
+                pathpart=[]
+                pathpart.append([dubinspath.x[i],dubinspath.y[i]])
+                path.extend(pathpart[::-1])
+
             node = node.parent
-        path.append([node.x,node.y]) # this should be the start
-        #path.append([self.x_start.x, self.x_start.y]) #in principle this shouldn't be necessary
+            if last:
+                break
+            elif not node.parent:
+                last = True
+
+            #node = Node((0,0))
+
 
         return path
 
@@ -476,10 +526,12 @@ class IRrtStar:
 
         return C
 
-    @staticmethod
-    def Nearest(nodelist, n):
-        return nodelist[int(np.argmin([(nd.x - n.x) ** 2 + (nd.y - n.y) ** 2
-                                       for nd in nodelist]))]
+    #@staticmethod
+    def Nearest(self,nodelist, n):
+        return nodelist[int(np.argmin([self.get_distance_and_angle(nd, n)[0] for nd in nodelist]))]
+
+        # return nodelist[int(np.argmin([(nd.x - n.x) ** 2 + (nd.y - n.y) ** 2
+        #                                for nd in nodelist]))]
 
     #@staticmethod
     def Line(self,x_start, x_goal):
@@ -555,9 +607,30 @@ class IRrtStar:
             self.costmatrix[node_start.y*100+node_start.x,node_end.y*100+node_end.x]=distance
             self.costmatrix[node_end.y*100+node_end.x,node_start.y*100+node_start.x]=distance # mirror the matrix
             self.anglematrix[node_start.y*100+node_start.x,node_end.y*100+node_end.x]=angle
-            self.anglematrix[node_end.y*100+node_end.x,node_start.y*100+node_start.x]=-angle # mirror the matrix
+            self.anglematrix[node_end.y*100+node_end.x,node_start.y*100+node_start.x]=angle-math.pi # mirror the matrix
             if distance > 0:
                 self.FindInfo(node_end.x,node_end.y,node_start.x,node_start.y,node_start,distance,False) # to check whether the path passes through obstacles/edges
+
+        # Ranger kinematic constraints: taking time to turn
+        # if node_start.parent:
+        #     dangle = (self.anglematrix[node_start.parent.y*100 + node_start.parent.x,node_start.y*100 + node_start.x]-angle)**2# squared difference in angle between the line segments
+        #     distance+=dangle
+
+        # Limited angle kinematic constraint
+        anglelimit = 2*math.pi/4 #90 degrees
+        if node_start.parent:
+            dangle = (self.anglematrix[node_start.parent.y*100 + node_start.parent.x,node_start.y*100 + node_start.x]-angle)**2# squared difference in angle between the line segments
+            distance+=dangle
+            if (dangle>(anglelimit**2)):
+                distance+=np.inf # if the angle exceeds the limit, inf is added
+
+        # Working with angular velocity (over distance)
+        # Note: difficult because it also depends on the next direction so we know what the desired direction should be at the goal position
+        # if node_start.parent:
+        #     totaldistance = distance+self.anglematrix[node_start.parent.y*100 + node_start.parent.x,node_start.y*100 + node_start.x]
+        #     dangle = (self.anglematrix[node_start.parent.y*100 + node_start.parent.x,node_start.y*100 + node_start.x]-angle)**2# squared difference in angle between the line segments
+        #     vangle = dangle/totaldistance # angular velocity (Note: dangle still squared)
+        #     distance+=vangle*10
 
         return distance, angle
 

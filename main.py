@@ -89,8 +89,8 @@ def print_hi(name):
     #show_map(matrix_nonconvex)
     #heat_matrix = withrows(matrix_square,2,4,True)
 
-    #pathogen1 = Pathogen(patchnr=2,infectionduration=4,spreadrange=10, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.1, saturation=5)
-    pathogen1 = Pathogen(patchnr=1,infectionduration=6,spreadrange=6, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.1, saturation=3) # one big patch
+    pathogen1 = Pathogen(patchnr=2,infectionduration=8,spreadrange=3, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.3, saturation=5)
+    #pathogen1 = Pathogen(patchnr=1,infectionduration=6,spreadrange=6, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.1, saturation=3) # one big patch
     #spread_matrix, uncertainty_matrix = pathogenspread(field_matrix,heat_matrix,pathogen1, False)
     #weed1 = Weed(patchnr=4,patchsize=7,spreadrange=3,reproductionrate=2,standarddeviation=1, saturation=1,plantattach=False)
     #spread_matrix,uncertainty_matrix = weedsspread(field_matrix,heat_matrix,weed1, True)
