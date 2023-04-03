@@ -277,16 +277,23 @@ def planning_from_origin(gx, gy, gyaw, curv, step_size):
     return x_list, y_list, yaw_list, best_mode, best_cost
 
 
-def calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, curv, step_size=0.1):
+def calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, curv, dubinsmatrix, step_size=0.1):
     gx = gx - sx
     gy = gy - sy
 
     l_rot = Rot.from_euler('z', syaw).as_matrix()[0:2, 0:2]
     le_xy = np.stack([gx, gy]).T @ l_rot
     le_yaw = gyaw - syaw
-
-    lp_x, lp_y, lp_yaw, mode, lengths = planning_from_origin(
-        le_xy[0], le_xy[1], le_yaw, curv, step_size)
+    if [le_xy[0], le_xy[1], le_yaw] not in dubinsmatrix[0]:
+        lp_x, lp_y, lp_yaw, mode, lengths = planning_from_origin(
+            le_xy[0], le_xy[1], le_yaw, curv, step_size)
+        for i in range(len(dubinsmatrix[0])):
+            if dubinsmatrix[0][i]==None:
+                dubinsmatrix[0][i] = [le_xy[0], le_xy[1], le_yaw]
+                dubinsmatrix[1][i] = [lp_x, lp_y, lp_yaw, mode, lengths]
+    else:
+        index = dubinsmatrix[0].index([le_xy[0], le_xy[1], le_yaw])
+        [lp_x, lp_y, lp_yaw, mode, lengths] = dubinsmatrix[1][index]
 
     rot = Rot.from_euler('z', -syaw).as_matrix()[0:2, 0:2]
     converted_xy = np.stack([lp_x, lp_y]).T @ rot
@@ -294,7 +301,7 @@ def calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, curv, step_size=0.1):
     y_list = converted_xy[:, 1] + sy
     yaw_list = [pi_2_pi(i_yaw + syaw) for i_yaw in lp_yaw]
 
-    return PATH(lengths, mode, x_list, y_list, yaw_list)
+    return PATH(lengths, mode, x_list, y_list, yaw_list), dubinsmatrix
 
 
 def main():
@@ -333,10 +340,10 @@ def main():
         plt.clf()
         plt.plot(path_x, path_y, linewidth=1, color='gray')
 
-        for x, y, theta in states:
-            draw.Arrow(x, y, np.deg2rad(theta), 2, 'blueviolet')
-
-        draw.Car(path_x[i], path_y[i], yaw[i], 1.5, 3)
+        # for x, y, theta in states:
+        #     draw.Arrow(x, y, np.deg2rad(theta), 2, 'blueviolet')
+        #
+        # draw.Car(path_x[i], path_y[i], yaw[i], 1.5, 3)
 
         plt.axis("equal")
         plt.title("Simulation of Dubins Path")
