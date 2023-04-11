@@ -100,7 +100,8 @@ def print_hi(name):
     #np.save('uncertainty_matrixfile_small.npy', uncertainty_matrix)
     #uncertainty_matrix= np.load('uncertainty_matrixfile.npy')
     uncertainty_matrix= np.load('uncertainty_matrixfile_small.npy')
-    #uncertainty_matrix[uncertainty_matrix==0]=0.01 # little bit of uncertainty all over the map
+    print(np.nansum(uncertainty_matrix))
+    uncertainty_matrix[uncertainty_matrix==0]=0.001 # little bit of uncertainty all over the map
 
     #half uniform matrix:
     #uncertainty_matrix=deepcopy(field_matrix)
@@ -108,6 +109,7 @@ def print_hi(name):
     #(uncertainty_matrix[:,0:50])[uncertainty_matrix[:,0:50]==0]=0.5
 
     show_map(uncertainty_matrix)
+    print(np.nansum(uncertainty_matrix))
     #rig(uncertainty_matrix)
     [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix)
     #[finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_rows_matrix(uncertainty_matrix,row_nrs,row_edges)

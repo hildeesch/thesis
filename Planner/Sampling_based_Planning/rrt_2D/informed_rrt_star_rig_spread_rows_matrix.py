@@ -94,7 +94,7 @@ class IRrtStar:
         self.info_right = np.zeros((len(self.row_nrs),len(self.row_nrs)))
 
         self.costmatrix = np.empty((100*100,100*100) )
-        #self.directionmatrix = np.empty((100*100,100*100),dtype = object )
+        self.directionmatrix = np.empty((100*100,100*100),dtype = object )
         self.infopathmatrix = np.empty((100*100,100*100),dtype = object )
         self.infomatrix = np.empty((100*100,100*100) )
 
