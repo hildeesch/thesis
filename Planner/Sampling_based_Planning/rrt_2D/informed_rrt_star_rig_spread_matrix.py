@@ -169,6 +169,9 @@ class IRrtStar:
             if not double:  # budget check for nearest parent (to make it more efficient)
                 # print(x_nearest.cost + self.Line(x_nearest, x_new) + self.Line(x_new, self.x_goal))
                 node_new=[]
+                for x_near in self.Near(self.V, x_new, self.search_radius):
+                    timestart = time.time()
+                    self.Rewiringv2(x_near, x_new)
                 for x_near in self.Near(self.V,x_new):
                     #if x_new and not self.utils.is_collision(x_near, x_new):
 
@@ -196,11 +199,11 @@ class IRrtStar:
                             self.V.append(node_new) #generate a "node"/trajectory to each near point
 
                             # rewire
-                            for x_near in self.Near(self.V,x_new,self.search_radius):
-                                timestart=time.time()
-                                self.Rewiring(x_near,node_new)
-                                timeend = time.time()
-                                self.time[4] += (timeend - timestart)
+                            # for x_near in self.Near(self.V,x_new,self.search_radius):
+                            #     timestart=time.time()
+                            #     self.Rewiringv2(x_near,node_new)
+                            #     timeend = time.time()
+                            #     self.time[4] += (timeend - timestart)
 
 
                             #if self.InGoalRegion(node_new): # skip because we already check this earlier
@@ -382,14 +385,19 @@ class IRrtStar:
                 # if totalcost not increasing, also add the temp (the old one)
                 if x_temp.totalinfo>x_near.totalinfo:
                     # Scenario 1:
-                    # x_near = x_temp
+                    # print("Reverse rewiring")
+                    # x_near.parent = x_temp.parent
+                    # x_near.info = x_temp.info
+                    # x_near.cost = x_temp.cost
+                    # x_near.totalinfo = x_temp.totalinfo
+                    # x_near.totalcost = x_temp.totalcost
                     # Other scenarios
                     self.V.append(x_temp)
-                    oldparent=x_temp
+                    # oldparent=x_temp
                     #print("Totalinfo rewiring not increased, copy of old node added")
 
                 # Scenario 1:
-                # else:
+                #else:
                 self.Recalculate(x_near,oldparent) # recalculates the cost and info for nodes further down the path
 
 
@@ -402,6 +410,98 @@ class IRrtStar:
 
                 #x_near.infopath = infopath
                 #print("Rewiring took place!!")
+
+    def Rewiringv2(self, x_near,x_new): #not changing the whole parent path but only changing the direct parent and then returning to the "old" path
+        if x_near.parent != self.x_start and x_near != self.x_start: # because otherwise there's no "old" path to go back to
+            c_near = x_near.cost
+            if self.kinematic=="dubins":
+                [cost,info] = self.dubins(x_new, x_near, False)
+                c_new = x_new.cost + cost
+            else:
+                c_new = x_near.parent.parent.cost + self.Line(x_near.parent.parent,x_new) + self.Line(x_new, x_near)
+
+
+            # if x_new.parent.x==x_near.x and x_new.parent.y==x_near.y:
+            #     return # if the parent of x_new = x_near, we don't want to make the parent of x_near = x_new (because then we create a loose segment
+            if c_new < c_near:
+                if not self.kinematic=="dubins":
+                    newnode = Node((x_new.x, x_new.y))
+                    newnode.parent = x_near.parent.parent
+                    addnew=True
+                    # for node in self.V[::-1]: # to prevent adding doubles
+                    #     if node.parent==newnode.parent and node.x==newnode.x and node.y==newnode.y:
+                    #         newnode=node
+                    #         addnew = False
+                    #         break
+                    if addnew:
+                        newnode.info = x_near.parent.parent.info + self.FindInfo(x_near.parent.parent.x,
+                                                                                 x_near.parent.parent.y, x_new.x, x_new.y,
+                                                                                 x_near.parent.parent, self.search_radius,
+                                                                                 True)
+                        newnode.cost = x_near.parent.parent.cost + self.Line(x_near.parent.parent, x_new)
+                        self.LastPath(newnode)
+                    info = newnode.info + self.FindInfo(x_new.x,x_new.y,x_near.x,x_near.y,newnode,self.search_radius,True)
+
+                #info += x_near.parent.parent.info
+
+                info_near = x_near.info
+
+                info_new = info
+                if info_new>=info_near: #note: this is different than the condition in pruning
+                    if addnew:
+                        self.V.append(newnode)
+
+                    if x_near==self.x_best:
+                        previnfo=x_near.info
+                        prevtotalinfo=x_near.totalinfo
+                    # saving temporary node to compare the total info values (TODO: check if deepcopy is faster than assigning all the node parameters)
+                    x_temp = Node((x_near.x,x_near.y))
+                    x_temp.parent = x_near.parent
+                    x_temp.info = x_near.info
+                    x_temp.cost = x_near.cost
+                    x_temp.totalinfo = x_near.totalinfo
+                    x_temp.totalcost = x_near.totalcost
+
+                    # rewiring:
+
+                    x_near.parent = newnode
+                    x_near.info = info_new
+                    x_near.cost = c_new
+                    self.LastPath(x_near) # also recalculate the last info part
+                    if x_near==self.x_best and prevtotalinfo>x_near.totalinfo:
+                        print("[REWIRING] Best node is removed, prev totinfo: "+str(prevtotalinfo)+" Previnfo: "+str(previnfo)+" New totinfo: "+str(x_near.totalinfo)+" Newinfo: "+str(x_near.info))
+
+                    oldparent=None
+                    # if totalcost not increasing, also add the temp (the old one)
+                    if x_temp.totalinfo>x_near.totalinfo:
+                        # Scenario 1:
+                        # print("Reverse rewiring")
+                        # x_near.parent = x_temp.parent
+                        # x_near.info = x_temp.info
+                        # x_near.cost = x_temp.cost
+                        # x_near.totalinfo = x_temp.totalinfo
+                        # x_near.totalcost = x_temp.totalcost
+                        # Other scenarios
+                        self.V.append(x_temp)
+                        # oldparent=x_temp
+                        #print("Totalinfo rewiring not increased, copy of old node added")
+
+                    # Scenario 1:
+                    #else:
+                    self.Recalculate(x_near,oldparent) # recalculates the cost and info for nodes further down the path
+
+
+                    # # bit of debugging:
+                    # thisnode=x_new
+                    # while thisnode.parent:
+                    #     thisnode=thisnode.parent
+                    # if not (thisnode.x==self.x_start.x and thisnode.y==self.x_start.y):
+                    #     print("WARNING WARNING WARNING LOOSE END LOOSE END LOOSE END LOOSE END LOOSE END LOOSE END AT X_NEAR = ("+str(x_near.x)+","+str(x_near.y)+")")
+
+                    #x_near.infopath = infopath
+                    #print("Rewiring took place!!")
+                else:
+                    del newnode
     def Recalculate(self,parent, prevparent=None):
         for node in self.V:  # to recalculate the cost and info for nodes further down the line
             if node.parent == parent:
@@ -439,7 +539,7 @@ class IRrtStar:
                         print("[RECALCULATE] Best node is removed, prev totinfo: " + str(
                                     prevtotalinfo) + " Previnfo: " + str(previnfo) + " New totinfo: " + str(
                                     node.totalinfo) + " Newinfo: " + str(node.info))
-                # oldparent=None
+                oldparent=None
                 # if not prevparent==None:
                 #     if x_temp.totalinfo>node.totalinfo:
                 #         self.V.append(x_temp)
@@ -464,8 +564,7 @@ class IRrtStar:
                 #if (node2.cost<=node1.cost and node2.info>node1.info): #prune lesser paths or doubles
                 if (node2.cost<=node1.cost and node2.info>node1.info) or (node2.cost<node1.cost and node2.info==node1.info) or (node1.parent==node2.parent and index!=index2): #prune lesser paths or doubles
                 #if (node2.cost <= node1.cost and node2.info > node1.info) or (node1.parent == node2.parent and index != index2):  # prune lesser paths or doubles
-                    if (node1.cost==node2.cost and node1.info==node2.info and index!=index2 and node1.parent==node2.parent):
-                        print("Double detected, now pruned")
+
                         # print("node 1 =("+str(node1.x)+","+str(node1.y)+") parent =("+str(node1.parent.x)+","+str(node1.parent.y)+")")
                         # print("node 1 cost = "+str(node1.cost)+" node 2 cost ="+str(node2.cost)+"node 1 info = "+str(node1.info)+" node 2 info ="+str(node2.info))
                         # print("node 2 =(" + str(node2.x) + "," + str(node2.y) + ") parent =(" + str(node2.parent.x) + "," + str(node2.parent.y) + ")")
@@ -477,6 +576,8 @@ class IRrtStar:
                         if allnode.parent==node1: # in this case we can't prune the node because other nodes depend on it
                             nochildren=False
                     if nochildren:
+                        # if (node1.cost == node2.cost and node1.info == node2.info and index != index2 and node1.parent == node2.parent):
+                        #     print("Double detected, now pruned")
                         if node1 in self.V: #still have to figure out why this is needed (TODO)
                             if node1 == self.x_best:
                                 print("[PRUNING] Best node is removed, info: " + str(
@@ -916,6 +1017,12 @@ class IRrtStar:
                 plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-g")
             elif not node.parent and not (node.x==self.x_start.x and node.y==self.x_start.y):
                 plt.plot(node.x, node.y, "bs", linewidth=3)
+
+        if self.x_best!=self.x_start:
+            node = self.x_best
+            while node.parent:
+                plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-b")
+                node = node.parent
 
         # for node in self.V:
         #     if node.parent:
