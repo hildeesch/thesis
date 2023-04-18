@@ -101,7 +101,7 @@ def print_hi(name):
     #uncertainty_matrix= np.load('uncertainty_matrixfile.npy')
     uncertainty_matrix= np.load('uncertainty_matrixfile_small.npy')
     print(np.nansum(uncertainty_matrix))
-    #uncertainty_matrix[uncertainty_matrix==0]=0.001 # little bit of uncertainty all over the map
+    uncertainty_matrix[uncertainty_matrix==0]=0.001 # little bit of uncertainty all over the map
 
     #half uniform matrix:
     #uncertainty_matrix=deepcopy(field_matrix)

@@ -169,9 +169,9 @@ class IRrtStar:
             if not double:  # budget check for nearest parent (to make it more efficient)
                 # print(x_nearest.cost + self.Line(x_nearest, x_new) + self.Line(x_new, self.x_goal))
                 node_new=[]
-                for x_near in self.Near(self.V, x_new, self.search_radius):
-                    timestart = time.time()
-                    self.Rewiringv2(x_near, x_new)
+                # for x_near in self.Near(self.V, x_new, self.search_radius):
+                #     timestart = time.time()
+                #     self.Rewiringv2(x_near, x_new)
                 for x_near in self.Near(self.V,x_new):
                     #if x_new and not self.utils.is_collision(x_near, x_new):
 
@@ -201,7 +201,7 @@ class IRrtStar:
                             # rewire
                             # for x_near in self.Near(self.V,x_new,self.search_radius):
                             #     timestart=time.time()
-                            #     self.Rewiringv2(x_near,node_new)
+                            #     self.Rewiring(x_near,node_new)
                             #     timeend = time.time()
                             #     self.time[4] += (timeend - timestart)
 
@@ -225,7 +225,9 @@ class IRrtStar:
                 self.animation()
                 self.time[7] = time.time()-totalstarttime
                 #print(self.time)
-                print("It.: " + str(k) + " Time: " + str(self.time[7]) + " Info: " + str(x_best.info) + " Tot. info: "+str(x_best.totalinfo) + " Cost: " + str(x_best.totalcost) + " Nodes: "+str(len(self.V)))
+                if k>0:
+                    print("It.: " + str(k) + " Time: " + str(self.time[7]) + " Info: " + str(x_best.info) + " Tot. info: "+str(x_best.totalinfo) + " Cost: " + str(x_best.totalcost) + " Nodes: "+str(len(self.V)))
+                    self.Rewiring_after(self.x_best)
 
         self.path = self.ExtractPath(x_best)
         #for point in reversed(x_best.infopath):
@@ -393,7 +395,7 @@ class IRrtStar:
                     # x_near.totalcost = x_temp.totalcost
                     # Other scenarios
                     self.V.append(x_temp)
-                    # oldparent=x_temp
+                    oldparent=x_temp
                     #print("Totalinfo rewiring not increased, copy of old node added")
 
                 # Scenario 1:
@@ -471,7 +473,8 @@ class IRrtStar:
                     if x_near==self.x_best and prevtotalinfo>x_near.totalinfo:
                         print("[REWIRING] Best node is removed, prev totinfo: "+str(prevtotalinfo)+" Previnfo: "+str(previnfo)+" New totinfo: "+str(x_near.totalinfo)+" Newinfo: "+str(x_near.info))
 
-                    oldparent=None
+                    #oldparent=None
+                    oldparent=x_temp
                     # if totalcost not increasing, also add the temp (the old one)
                     if x_temp.totalinfo>x_near.totalinfo:
                         # Scenario 1:
@@ -506,20 +509,21 @@ class IRrtStar:
         for node in self.V:  # to recalculate the cost and info for nodes further down the line
             if node.parent == parent:
                 # Scenario 3:
-                # if not prevparent==None:
-                #     # saving temporary node to compare the total info values (TODO: check if deepcopy is faster than assigning all the node parameters)
-                #     x_temp = Node((node.x, node.y))
-                #     x_temp.parent = node.parent
-                #     x_temp.info = node.info
-                #     x_temp.cost = node.cost
-                #     x_temp.totalinfo = node.totalinfo
-                #     x_temp.totalcost = node.totalcost
+                if not prevparent==None:
+                    # saving temporary node to compare the total info values (TODO: check if deepcopy is faster than assigning all the node parameters)
+                    x_temp = Node((node.x, node.y))
+                    x_temp.parent = prevparent
+                    x_temp.info = node.info
+                    x_temp.cost = node.cost
+                    x_temp.totalinfo = node.totalinfo
+                    x_temp.totalcost = node.totalcost
 
                 # Scenario 2:
                 # if the old one had a higher total value, we change the parent to the old (the copy) #TODO check how valid this is
-                if not prevparent==None:
-                    node.parent=prevparent
+                # if not prevparent==None:
+                #     node.parent=prevparent
                 if prevparent==None:
+                #if True: #adapted scenario 3
                     if node==self.x_best:
                         previnfo=node.info
                         prevtotalinfo=node.totalinfo
@@ -535,20 +539,166 @@ class IRrtStar:
 
                     self.LastPath(node)
 
-                    if node == self.x_best and node.totalinfo<prevtotalinfo:
-                        print("[RECALCULATE] Best node is removed, prev totinfo: " + str(
-                                    prevtotalinfo) + " Previnfo: " + str(previnfo) + " New totinfo: " + str(
-                                    node.totalinfo) + " Newinfo: " + str(node.info))
+                    # if node == self.x_best and node.totalinfo<prevtotalinfo:
+                    #     print("[RECALCULATE] Best node is removed, prev totinfo: " + str(
+                    #                 prevtotalinfo) + " Previnfo: " + str(previnfo) + " New totinfo: " + str(
+                    #                 node.totalinfo) + " Newinfo: " + str(node.info))
                 oldparent=None
-                # if not prevparent==None:
-                #     if x_temp.totalinfo>node.totalinfo:
-                #         self.V.append(x_temp)
-                #         oldparent=x_temp
-                #         print("Totalinfo recalculating not increased, copy of old node added")
-                #     else:
-                #         print("Totalinfo recalculating increased, copy of old node not added")
+                # scenario 3
+                if not prevparent==None:
+                    if x_temp.totalinfo>node.totalinfo:
+                        self.V.append(x_temp)
+                    # possibly: tab next line
+                    oldparent=x_temp
+                    #     print("Totalinfo recalculating not increased, copy of old node added")
+                    # else:
+                    #     print("Totalinfo recalculating increased, copy of old node not added")
                 #only continue if the rewiring increased the totalinfo (prevparent==None)
                 self.Recalculate(node,oldparent)
+
+    def Rewiring_after(self, best_node): #rewiring afterwards
+        # goal: gain more info while remaining within the budget
+        print("Start rewiring after")
+        print(" Info: " + str(self.x_best.info) + " Tot. info: " + str(
+            self.x_best.totalinfo) + " Cost: " + str(self.x_best.totalcost))
+        bestpath=[]
+        node=best_node
+        while node.parent!=self.x_start:
+            bestpath.append(node)
+            node=node.parent
+
+
+        totalinfo = self.x_best.totalinfo
+        notfinished = True
+        i=1
+        while notfinished:
+            node = bestpath[-i]
+
+            #for x_near in self.Near(self.V, node, self.search_radius):
+            for x_near in self.Near(self.V, node, 10):
+                x_temp = Node((node.x, node.y))
+                x_temp.parent = node.parent
+                x_temp.info = node.info
+                x_temp.cost = node.cost
+                x_temp.totalinfo = node.totalinfo
+                x_temp.totalcost = node.totalcost
+
+                #if node.parent != self.x_start and node != self.x_start:  # because otherwise there's no "old" path to go back to
+                c_old = node.cost
+                if self.kinematic == "dubins":
+                    [cost, info] = self.dubins(node, x_near, False)
+                    c_new = x_near.cost + cost
+                else:
+                    c_new = node.parent.parent.cost + self.Line(node.parent.parent, x_near) + self.Line(node,
+                                                                                                           x_near)
+
+                # if x_new.parent.x==x_near.x and x_new.parent.y==x_near.y:
+                #     return # if the parent of x_new = x_near, we don't want to make the parent of x_near = x_new (because then we create a loose segment
+                if (c_new-c_old) < (self.budget-best_node.totalcost): # still within budget
+                    if not self.kinematic == "dubins":
+                        newnode = Node((x_near.x, x_near.y))
+                        newnode.parent = node.parent.parent
+                        addnew = True
+                        # for node in self.V[::-1]: # to prevent adding doubles
+                        #     if node.parent==newnode.parent and node.x==newnode.x and node.y==newnode.y:
+                        #         newnode=node
+                        #         addnew = False
+                        #         break
+                        if addnew:
+                            newnode.info = node.parent.parent.info + self.FindInfo(node.parent.parent.x,
+                                                                                     node.parent.parent.y, x_near.x,
+                                                                                     x_near.y,
+                                                                                     node.parent.parent,
+                                                                                     self.search_radius,
+                                                                                     True)
+                            newnode.cost = node.parent.parent.cost + self.Line(node.parent.parent, x_near)
+                            self.LastPath(newnode)
+                        info = newnode.info + self.FindInfo(x_near.x, x_near.y, node.x, node.y, newnode,
+                                                            self.search_radius, True)
+
+                    # info += x_near.parent.parent.info
+
+                    info_old = node.info
+
+                    info_new = info
+                    if info_new >= info_old:  # note: this is different than the condition in pruning
+                        if addnew:
+                            self.V.append(newnode)
+
+                        # if x_near == self.x_best:
+                        #     previnfo = x_near.info
+                        #     prevtotalinfo = x_near.totalinfo
+                        # saving temporary node to compare the total info values (TODO: check if deepcopy is faster than assigning all the node parameters)
+                        # x_temp = Node((x_near.x, x_near.y))
+                        # x_temp.parent = x_near.parent
+                        # x_temp.info = x_near.info
+                        # x_temp.cost = x_near.cost
+                        # x_temp.totalinfo = x_near.totalinfo
+                        # x_temp.totalcost = x_near.totalcost
+
+                        # rewiring:
+
+                        node.parent = newnode
+                        node.info = info_new
+                        node.cost = c_new
+                        self.LastPath(node)  # also recalculate the last info part
+                        # if x_near == self.x_best and prevtotalinfo > x_near.totalinfo:
+                        #     print("[REWIRING] Best node is removed, prev totinfo: " + str(
+                        #         prevtotalinfo) + " Previnfo: " + str(previnfo) + " New totinfo: " + str(
+                        #         x_near.totalinfo) + " Newinfo: " + str(x_near.info))
+
+                        # oldparent=None
+                        oldparent = x_temp
+                        # if totalcost not increasing, also add the temp (the old one)
+                        #if x_temp.totalinfo > x_near.totalinfo:
+                            # Scenario 1:
+                            # print("Reverse rewiring")
+                            # x_near.parent = x_temp.parent
+                            # x_near.info = x_temp.info
+                            # x_near.cost = x_temp.cost
+                            # x_near.totalinfo = x_temp.totalinfo
+                            # x_near.totalcost = x_temp.totalcost
+                            # Other scenarios
+                            #self.V.append(x_temp)
+                            # oldparent=x_temp
+                            # print("Totalinfo rewiring not increased, copy of old node added")
+
+                        # Scenario 1:
+                        # else:
+                        self.Recalculate(node,
+                                         None)  # recalculates the cost and info for nodes further down the path
+                        if totalinfo>best_node.totalinfo:
+                            # reverse rewiring
+                            node.parent = x_temp.parent
+                            node.info = x_temp.info
+                            node.cost = x_temp.cost
+                            node.totalinfo = x_temp.totalinfo
+                            node.totalcost = x_temp.totalcost
+                            self.Recalculate(node,None)
+                        else:
+                            totalinfo=best_node.totalinfo
+                        # # bit of debugging:
+                        # thisnode=x_new
+                        # while thisnode.parent:
+                        #     thisnode=thisnode.parent
+                        # if not (thisnode.x==self.x_start.x and thisnode.y==self.x_start.y):
+                        #     print("WARNING WARNING WARNING LOOSE END LOOSE END LOOSE END LOOSE END LOOSE END LOOSE END AT X_NEAR = ("+str(x_near.x)+","+str(x_near.y)+")")
+
+                        # x_near.infopath = infopath
+                        # print("Rewiring took place!!")
+                    else:
+                        del newnode
+                # else:
+                #     notfinished=False
+            i+=1
+            if i==len(bestpath):
+                notfinished=False
+        print("End rewiring after")
+        print(" Info: " + str(self.x_best.info) + " Tot. info: " + str(
+            self.x_best.totalinfo) + " Cost: " + str(self.x_best.totalcost))
+
+
+
     def Pruning(self, x_new):
         nodelist=[]
         costlist=[]
