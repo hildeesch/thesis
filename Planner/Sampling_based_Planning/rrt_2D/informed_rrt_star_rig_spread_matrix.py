@@ -39,7 +39,7 @@ class Node:
 
 class IRrtStar:
     def __init__(self, x_start, x_goal, step_len,
-                 goal_sample_rate, search_radius, iter_max,uncertaintymatrix):
+                 goal_sample_rate, search_radius, iter_max,uncertaintymatrix,scenario=3):
         self.x_start = Node(x_start)
         self.x_goal = Node(x_goal)
         self.step_len = step_len
@@ -67,6 +67,7 @@ class IRrtStar:
         self.reduction = 0
 
         self.budget=200
+        self.scenario=scenario
         self.kinematic = "none" # kinematic constraint
         # choices: "none", "dubins", "ranger", "limit"
         self.dubinsmatrix = np.empty((100, 100), dtype=object)
@@ -129,8 +130,8 @@ class IRrtStar:
                 else:
                     count_down=20 #reset
                     print("reset countdown")
-            # if k==101: # to test up to certain iteration
-            #     count_down=0
+            if k==301: # to test up to certain iteration
+                count_down=0
             if count_down<=0 and k>1000:
                 print("Reached stopping criterion at iteration "+str(k))
                 break # we stop iterating if the best score is not improving much anymore and we already passed at least ... cycles
@@ -169,9 +170,10 @@ class IRrtStar:
             if not double:  # budget check for nearest parent (to make it more efficient)
                 # print(x_nearest.cost + self.Line(x_nearest, x_new) + self.Line(x_new, self.x_goal))
                 node_new=[]
-                # for x_near in self.Near(self.V, x_new, self.search_radius):
-                #     timestart = time.time()
-                #     self.Rewiringv2(x_near, x_new)
+                if self.scenario!=5:
+                    for x_near in self.Near(self.V, x_new, self.search_radius):
+                        timestart = time.time()
+                        self.Rewiringv2(x_near, x_new)
                 for x_near in self.Near(self.V,x_new):
                     #if x_new and not self.utils.is_collision(x_near, x_new):
 
@@ -199,11 +201,12 @@ class IRrtStar:
                             self.V.append(node_new) #generate a "node"/trajectory to each near point
 
                             # rewire
-                            # for x_near in self.Near(self.V,x_new,self.search_radius):
-                            #     timestart=time.time()
-                            #     self.Rewiring(x_near,node_new)
-                            #     timeend = time.time()
-                            #     self.time[4] += (timeend - timestart)
+                            # if self.scenario!=5:
+                            #     for x_near in self.Near(self.V,x_new,self.search_radius):
+                            #         timestart=time.time()
+                            #         self.Rewiring(x_near,node_new)
+                            #         timeend = time.time()
+                            #         self.time[4] += (timeend - timestart)
 
 
                             #if self.InGoalRegion(node_new): # skip because we already check this earlier
@@ -225,9 +228,9 @@ class IRrtStar:
                 self.animation()
                 self.time[7] = time.time()-totalstarttime
                 #print(self.time)
-                if k>0:
-                    print("It.: " + str(k) + " Time: " + str(self.time[7]) + " Info: " + str(x_best.info) + " Tot. info: "+str(x_best.totalinfo) + " Cost: " + str(x_best.totalcost) + " Nodes: "+str(len(self.V)))
-                    self.Rewiring_after(self.x_best)
+                # if k>0:
+                #     print("It.: " + str(k) + " Time: " + str(self.time[7]) + " Info: " + str(x_best.info) + " Tot. info: "+str(x_best.totalinfo) + " Cost: " + str(x_best.totalcost) + " Nodes: "+str(len(self.V)))
+                #     self.Rewiring_after(self.x_best)
 
         self.path = self.ExtractPath(x_best)
         #for point in reversed(x_best.infopath):
@@ -383,24 +386,26 @@ class IRrtStar:
                 if x_near==self.x_best and prevtotalinfo>x_near.totalinfo:
                     print("[REWIRING] Best node is removed, prev totinfo: "+str(prevtotalinfo)+" Previnfo: "+str(previnfo)+" New totinfo: "+str(x_near.totalinfo)+" Newinfo: "+str(x_near.info))
 
-                oldparent=None
                 # if totalcost not increasing, also add the temp (the old one)
-                if x_temp.totalinfo>x_near.totalinfo:
-                    # Scenario 1:
-                    # print("Reverse rewiring")
-                    # x_near.parent = x_temp.parent
-                    # x_near.info = x_temp.info
-                    # x_near.cost = x_temp.cost
-                    # x_near.totalinfo = x_temp.totalinfo
-                    # x_near.totalcost = x_temp.totalcost
-                    # Other scenarios
-                    self.V.append(x_temp)
-                    oldparent=x_temp
-                    #print("Totalinfo rewiring not increased, copy of old node added")
+                if self.scenario==1:
+                    if x_temp.totalinfo > x_near.totalinfo:
+                        # Scenario 1:
+                        # print("Reverse rewiring")
+                        x_near.parent = x_temp.parent
+                        x_near.info = x_temp.info
+                        x_near.cost = x_temp.cost
+                        x_near.totalinfo = x_temp.totalinfo
+                        x_near.totalcost = x_temp.totalcost
 
-                # Scenario 1:
-                #else:
-                self.Recalculate(x_near,oldparent) # recalculates the cost and info for nodes further down the path
+                    else:
+                        self.Recalculate(x_near,
+                                     None)  # recalculates the cost and info for nodes further down the path
+                else: # all other scenarios:
+                    if x_temp.totalinfo>x_near.totalinfo:
+                        self.V.append(x_temp)
+                        oldparent=x_temp
+
+                    self.Recalculate(x_near,oldparent) # recalculates the cost and info for nodes further down the path
 
 
                 # # bit of debugging:
@@ -474,34 +479,36 @@ class IRrtStar:
                         print("[REWIRING] Best node is removed, prev totinfo: "+str(prevtotalinfo)+" Previnfo: "+str(previnfo)+" New totinfo: "+str(x_near.totalinfo)+" Newinfo: "+str(x_near.info))
 
                     #oldparent=None
-                    oldparent=x_temp
+
+                    #oldparent=x_temp
                     # if totalcost not increasing, also add the temp (the old one)
-                    if x_temp.totalinfo>x_near.totalinfo:
+                    if self.scenario==1:
+                        if x_temp.totalinfo > x_near.totalinfo:
+                            # Scenario 1:
+                            # print("Reverse rewiring")
+                            x_near.parent = x_temp.parent
+                            x_near.info = x_temp.info
+                            x_near.cost = x_temp.cost
+                            x_near.totalinfo = x_temp.totalinfo
+                            x_near.totalcost = x_temp.totalcost
+
+
                         # Scenario 1:
-                        # print("Reverse rewiring")
-                        # x_near.parent = x_temp.parent
-                        # x_near.info = x_temp.info
-                        # x_near.cost = x_temp.cost
-                        # x_near.totalinfo = x_temp.totalinfo
-                        # x_near.totalcost = x_temp.totalcost
-                        # Other scenarios
-                        self.V.append(x_temp)
-                        # oldparent=x_temp
-                        #print("Totalinfo rewiring not increased, copy of old node added")
+                        else:
+                            self.Recalculate(x_near,
+                                         None)  # recalculates the cost and info for nodes further down the path
+                    else: #all scenarios except 1
+                        if x_temp.totalinfo>x_near.totalinfo:
 
-                    # Scenario 1:
-                    #else:
-                    self.Recalculate(x_near,oldparent) # recalculates the cost and info for nodes further down the path
+                            self.V.append(x_temp)
+                            oldparent=x_temp
+                            #print("Totalinfo rewiring not increased, copy of old node added")
 
 
-                    # # bit of debugging:
-                    # thisnode=x_new
-                    # while thisnode.parent:
-                    #     thisnode=thisnode.parent
-                    # if not (thisnode.x==self.x_start.x and thisnode.y==self.x_start.y):
-                    #     print("WARNING WARNING WARNING LOOSE END LOOSE END LOOSE END LOOSE END LOOSE END LOOSE END AT X_NEAR = ("+str(x_near.x)+","+str(x_near.y)+")")
+                        self.Recalculate(x_near,oldparent) # recalculates the cost and info for nodes further down the path
 
-                    #x_near.infopath = infopath
+
+
                     #print("Rewiring took place!!")
                 else:
                     del newnode
@@ -509,21 +516,25 @@ class IRrtStar:
         for node in self.V:  # to recalculate the cost and info for nodes further down the line
             if node.parent == parent:
                 # Scenario 3:
-                if not prevparent==None:
-                    # saving temporary node to compare the total info values (TODO: check if deepcopy is faster than assigning all the node parameters)
-                    x_temp = Node((node.x, node.y))
-                    x_temp.parent = prevparent
-                    x_temp.info = node.info
-                    x_temp.cost = node.cost
-                    x_temp.totalinfo = node.totalinfo
-                    x_temp.totalcost = node.totalcost
+                if self.scenario==3 or self.scenario==6:
+                    if not prevparent==None:
+                        # saving temporary node to compare the total info values (TODO: check if deepcopy is faster than assigning all the node parameters)
+                        x_temp = Node((node.x, node.y))
+                        x_temp.parent = prevparent
+                        x_temp.info = node.info
+                        x_temp.cost = node.cost
+                        x_temp.totalinfo = node.totalinfo
+                        x_temp.totalcost = node.totalcost
 
                 # Scenario 2:
+                if self.scenario==2:
                 # if the old one had a higher total value, we change the parent to the old (the copy) #TODO check how valid this is
-                # if not prevparent==None:
-                #     node.parent=prevparent
-                if prevparent==None:
+                    if not prevparent==None:
+                        node.parent=prevparent
+
+                #if prevparent==None:
                 #if True: #adapted scenario 3
+                if self.scenario==3 or self.scenario==4:
                     if node==self.x_best:
                         previnfo=node.info
                         prevtotalinfo=node.totalinfo
@@ -545,15 +556,22 @@ class IRrtStar:
                     #                 node.totalinfo) + " Newinfo: " + str(node.info))
                 oldparent=None
                 # scenario 3
-                if not prevparent==None:
-                    if x_temp.totalinfo>node.totalinfo:
+                if self.scenario==3:
+                    if not prevparent==None:
+                        #if x_temp.totalinfo>node.totalinfo:
                         self.V.append(x_temp)
-                    # possibly: tab next line
-                    oldparent=x_temp
+                        # possibly: tab next line
+                        oldparent=x_temp
                     #     print("Totalinfo recalculating not increased, copy of old node added")
                     # else:
                     #     print("Totalinfo recalculating increased, copy of old node not added")
                 #only continue if the rewiring increased the totalinfo (prevparent==None)
+                if self.scenario==6:
+                    if not prevparent==None:
+                        if x_temp.totalinfo>node.totalinfo:
+                            self.V.append(x_temp)
+                        # possibly: tab next line
+                        oldparent=x_temp
                 self.Recalculate(node,oldparent)
 
     def Rewiring_after(self, best_node): #rewiring afterwards
@@ -625,49 +643,19 @@ class IRrtStar:
                         if addnew:
                             self.V.append(newnode)
 
-                        # if x_near == self.x_best:
-                        #     previnfo = x_near.info
-                        #     prevtotalinfo = x_near.totalinfo
-                        # saving temporary node to compare the total info values (TODO: check if deepcopy is faster than assigning all the node parameters)
-                        # x_temp = Node((x_near.x, x_near.y))
-                        # x_temp.parent = x_near.parent
-                        # x_temp.info = x_near.info
-                        # x_temp.cost = x_near.cost
-                        # x_temp.totalinfo = x_near.totalinfo
-                        # x_temp.totalcost = x_near.totalcost
-
                         # rewiring:
 
                         node.parent = newnode
                         node.info = info_new
                         node.cost = c_new
                         self.LastPath(node)  # also recalculate the last info part
-                        # if x_near == self.x_best and prevtotalinfo > x_near.totalinfo:
-                        #     print("[REWIRING] Best node is removed, prev totinfo: " + str(
-                        #         prevtotalinfo) + " Previnfo: " + str(previnfo) + " New totinfo: " + str(
-                        #         x_near.totalinfo) + " Newinfo: " + str(x_near.info))
 
-                        # oldparent=None
-                        oldparent = x_temp
-                        # if totalcost not increasing, also add the temp (the old one)
-                        #if x_temp.totalinfo > x_near.totalinfo:
-                            # Scenario 1:
-                            # print("Reverse rewiring")
-                            # x_near.parent = x_temp.parent
-                            # x_near.info = x_temp.info
-                            # x_near.cost = x_temp.cost
-                            # x_near.totalinfo = x_temp.totalinfo
-                            # x_near.totalcost = x_temp.totalcost
-                            # Other scenarios
-                            #self.V.append(x_temp)
-                            # oldparent=x_temp
-                            # print("Totalinfo rewiring not increased, copy of old node added")
 
                         # Scenario 1:
                         # else:
                         self.Recalculate(node,
                                          None)  # recalculates the cost and info for nodes further down the path
-                        if totalinfo>best_node.totalinfo:
+                        if totalinfo>=best_node.totalinfo:
                             # reverse rewiring
                             node.parent = x_temp.parent
                             node.info = x_temp.info
@@ -676,6 +664,7 @@ class IRrtStar:
                             node.totalcost = x_temp.totalcost
                             self.Recalculate(node,None)
                         else:
+                            print("Improved path through hindsight rewiring with increase in info: "+str(best_node.totalinfo-totalinfo))
                             totalinfo=best_node.totalinfo
                         # # bit of debugging:
                         # thisnode=x_new
@@ -1258,12 +1247,12 @@ class IRrtStar:
 
 
 
-def main(uncertaintymatrix):
+def main(uncertaintymatrix,scenario=3):
     x_start = (50, 50)  # Starting node
     #x_goal = (37, 18)  # Goal node
     x_goal = (50,50)
 
-    rrt_star = IRrtStar(x_start, x_goal, 15, 0.0, 15, 2000,uncertaintymatrix)
+    rrt_star = IRrtStar(x_start, x_goal, 15, 0.0, 15, 2000,uncertaintymatrix,scenario)
     [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration]=rrt_star.planning()
 
     return finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration

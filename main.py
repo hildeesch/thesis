@@ -101,7 +101,7 @@ def print_hi(name):
     #uncertainty_matrix= np.load('uncertainty_matrixfile.npy')
     uncertainty_matrix= np.load('uncertainty_matrixfile_small.npy')
     print(np.nansum(uncertainty_matrix))
-    uncertainty_matrix[uncertainty_matrix==0]=0.001 # little bit of uncertainty all over the map
+    #uncertainty_matrix[uncertainty_matrix==0]=0.001 # little bit of uncertainty all over the map
 
     #half uniform matrix:
     #uncertainty_matrix=deepcopy(field_matrix)
@@ -111,17 +111,38 @@ def print_hi(name):
     show_map(uncertainty_matrix)
     print(np.nansum(uncertainty_matrix))
     #rig(uncertainty_matrix)
-    [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix)
+    #[finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix)
     #[finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_rows_matrix(uncertainty_matrix,row_nrs,row_edges)
-    #rig_rows(uncertainty_matrix)
-    #rig_rows_v2(uncertainty_matrix,row_nrs,row_edges)
+
     #print("sum entropy = "+str(np.nansum(uncertainty_matrix)))
 
     time_end = time.time()
     time_total = time_end-time_start
     print("Time taken = "+str(time_total)+" seconds. This is more than "+str(time_total//60)+" minutes")
 
-    showpath(uncertainty_matrix,finalpath,finalcost,finalinfo,budget, steplength, searchradius, iteration,True,True)
+    #showpath(uncertainty_matrix,finalpath,finalcost,finalinfo,budget, steplength, searchradius, iteration,True,True)
+
+    tests=True
+    results=[]
+    if tests:
+        scenario=1
+        print("Without uncertainty all over")
+        while scenario<=6:
+            [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix,scenario)
+            print("Scen.= "+str(scenario)+" Cost= "+str(finalcost)+" Info= "+str(finalinfo))
+            results.append("Scen.= "+str(scenario)+" Cost= "+str(finalcost)+" Info= "+str(finalinfo))
+            scenario+=1
+        scenario=1
+        uncertainty_matrix[uncertainty_matrix == 0] = 0.001  # little bit of uncertainty all over the map
+        print("With uncertainty all over")
+        while scenario<=6:
+            [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix,scenario)
+            print("Scen.= "+str(scenario)+" Cost= "+str(finalcost)+" Info= "+str(finalinfo))
+            results.append("Scen.= "+str(scenario)+" Cost= "+str(finalcost)+" Info= "+str(finalinfo))
+            scenario+=1
+
+
+
 
 
 if __name__ == '__main__':
