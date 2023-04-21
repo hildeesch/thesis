@@ -284,24 +284,49 @@ def calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, curv, dubinsmatrix, step_size=0
     l_rot = Rot.from_euler('z', syaw).as_matrix()[0:2, 0:2]
     le_xy = np.stack([gx, gy]).T @ l_rot
     le_yaw = gyaw - syaw
+    add=False
     if [le_xy[0], le_xy[1], le_yaw] not in dubinsmatrix[0]:
         lp_x, lp_y, lp_yaw, mode, lengths = planning_from_origin(
             le_xy[0], le_xy[1], le_yaw, curv, step_size)
         for i in range(len(dubinsmatrix[0])):
-            if dubinsmatrix[0][i]==None:
-                dubinsmatrix[0][i] = [le_xy[0], le_xy[1], le_yaw]
-                dubinsmatrix[1][i] = [lp_x, lp_y, lp_yaw, mode, lengths]
+            if dubinsmatrix[0,i]==None:
+                dubinsmatrix[0,i] = [le_xy[0], le_xy[1], le_yaw]
+                dubinsmatrix[1,i] = [lp_x, lp_y, lp_yaw, mode, lengths]
+                add=True
+                index=i
+                #print("new index added in dubinsmatrix")
+                break;
     else:
+        print("dubinsmatrix reused")
         index = dubinsmatrix[0].index([le_xy[0], le_xy[1], le_yaw])
         [lp_x, lp_y, lp_yaw, mode, lengths] = dubinsmatrix[1][index]
 
     rot = Rot.from_euler('z', -syaw).as_matrix()[0:2, 0:2]
     converted_xy = np.stack([lp_x, lp_y]).T @ rot
+    if add==True:
+        infopath=[]
+        tempx = converted_xy[:, 0]
+        tempy =converted_xy[:, 1]
+        for j in range((len(tempx))):
+            if [math.floor(tempx[j]), math.floor(tempy[j])] not in infopath:
+                infopath.append([math.floor(tempx[j]), math.floor(tempy[j])])
+        dubinsmatrix[2,index] = infopath
+
+
     x_list = converted_xy[:, 0] + sx
     y_list = converted_xy[:, 1] + sy
     yaw_list = [pi_2_pi(i_yaw + syaw) for i_yaw in lp_yaw]
+    x_info=[]
+    y_info=[]
+    infopath=[]
+    for cell in dubinsmatrix[2,index]:
+        # x_info.append(cell[0]+sx)
+        # y_info.append(cell[1]+sy)
+        infopath.append([cell[0]+sx,cell[1]+sy])
+    # x_info = (dubinsmatrix[2,index])[:,0] + sx
+    # y_info = (dubinsmatrix[2,index])[:,1] + sy
 
-    return PATH(lengths, mode, x_list, y_list, yaw_list), dubinsmatrix
+    return PATH(lengths, mode, x_list, y_list, yaw_list), dubinsmatrix, infopath
 
 
 def main():

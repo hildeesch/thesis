@@ -101,7 +101,7 @@ def print_hi(name):
     #uncertainty_matrix= np.load('uncertainty_matrixfile.npy')
     uncertainty_matrix= np.load('uncertainty_matrixfile_small.npy')
     print(np.nansum(uncertainty_matrix))
-    #uncertainty_matrix[uncertainty_matrix==0]=0.001 # little bit of uncertainty all over the map
+    uncertainty_matrix[uncertainty_matrix==0]=0.001 # little bit of uncertainty all over the map
 
     #half uniform matrix:
     #uncertainty_matrix=deepcopy(field_matrix)
@@ -125,7 +125,7 @@ def print_hi(name):
     tests=True
     results=[]
     if tests:
-        scenario=1
+        scenario=5
         print("Without uncertainty all over")
         while scenario<=6:
             [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix,scenario)
@@ -141,7 +141,7 @@ def print_hi(name):
             results.append("Scen.= "+str(scenario)+" Cost= "+str(finalcost)+" Info= "+str(finalinfo))
             scenario+=1
 
-
+        print(results)
 
 
 
