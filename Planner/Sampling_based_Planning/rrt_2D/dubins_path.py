@@ -285,24 +285,30 @@ def calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, curv, dubinsmatrix, step_size=0
     le_xy = np.stack([gx, gy]).T @ l_rot
     le_yaw = gyaw - syaw
     add=False
-    if [le_xy[0], le_xy[1], le_yaw] not in dubinsmatrix[0]:
-        lp_x, lp_y, lp_yaw, mode, lengths = planning_from_origin(
-            le_xy[0], le_xy[1], le_yaw, curv, step_size)
-        for i in range(len(dubinsmatrix[0])):
-            if dubinsmatrix[0,i]==None:
-                dubinsmatrix[0,i] = [le_xy[0], le_xy[1], le_yaw]
-                dubinsmatrix[1,i] = [lp_x, lp_y, lp_yaw, mode, lengths]
-                add=True
-                index=i
-                #print("new index added in dubinsmatrix")
-                break;
-    else:
-        print("dubinsmatrix reused")
-        index = dubinsmatrix[0].index([le_xy[0], le_xy[1], le_yaw])
-        [lp_x, lp_y, lp_yaw, mode, lengths] = dubinsmatrix[1][index]
+
+    #old:
+    # if [le_xy[0], le_xy[1], le_yaw] not in dubinsmatrix[0]:
+    #     lp_x, lp_y, lp_yaw, mode, lengths = planning_from_origin(
+    #         le_xy[0], le_xy[1], le_yaw, curv, step_size)
+    #     for i in range(len(dubinsmatrix[0])):
+    #         if dubinsmatrix[0,i]==None:
+    #             dubinsmatrix[0,i] = [le_xy[0], le_xy[1], le_yaw]
+    #             dubinsmatrix[1,i] = [lp_x, lp_y, lp_yaw, mode, lengths]
+    #             add=True
+    #             index=i
+    #             #print("new index added in dubinsmatrix")
+    #             break;
+    # else:
+    #     print("dubinsmatrix reused")
+    #     index = dubinsmatrix[0].index([le_xy[0], le_xy[1], le_yaw])
+    #     [lp_x, lp_y, lp_yaw, mode, lengths] = dubinsmatrix[1][index]
+
+    # new:
+    lp_x, lp_y, lp_yaw, mode, lengths = planning_from_origin(le_xy[0], le_xy[1], le_yaw, curv, step_size)
 
     rot = Rot.from_euler('z', -syaw).as_matrix()[0:2, 0:2]
     converted_xy = np.stack([lp_x, lp_y]).T @ rot
+    add=True
     if add==True:
         infopath=[]
         tempx = converted_xy[:, 0]
@@ -310,19 +316,28 @@ def calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, curv, dubinsmatrix, step_size=0
         for j in range((len(tempx))):
             if [math.floor(tempx[j]), math.floor(tempy[j])] not in infopath:
                 infopath.append([math.floor(tempx[j]), math.floor(tempy[j])])
-        dubinsmatrix[2,index] = infopath
+        #dubinsmatrix[2,index] = infopath #old
 
+    # old:
+    # x_list = converted_xy[:, 0] + sx
+    # y_list = converted_xy[:, 1] + sy
 
-    x_list = converted_xy[:, 0] + sx
-    y_list = converted_xy[:, 1] + sy
+    # new:
+    x_list = converted_xy[:, 0]
+    y_list = converted_xy[:, 1]
+
     yaw_list = [pi_2_pi(i_yaw + syaw) for i_yaw in lp_yaw]
     x_info=[]
     y_info=[]
-    infopath=[]
-    for cell in dubinsmatrix[2,index]:
-        # x_info.append(cell[0]+sx)
-        # y_info.append(cell[1]+sy)
-        infopath.append([cell[0]+sx,cell[1]+sy])
+    #infopath=[]
+
+    #old:
+    # for cell in dubinsmatrix[2,index]:
+    #     # x_info.append(cell[0]+sx)
+    #     # y_info.append(cell[1]+sy)
+    #     infopath.append([cell[0]+sx,cell[1]+sy])
+
+
     # x_info = (dubinsmatrix[2,index])[:,0] + sx
     # y_info = (dubinsmatrix[2,index])[:,1] + sy
 
