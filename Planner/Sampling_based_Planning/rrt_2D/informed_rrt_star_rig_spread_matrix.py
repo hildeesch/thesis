@@ -68,10 +68,11 @@ class IRrtStar:
 
         self.budget=200
         self.scenario=scenario
-        self.kinematic = "dubins" # kinematic constraint
+        self.kinematic = "none" # kinematic constraint
         # choices: "none", "dubins", "ranger", "limit"
         #self.dubinsmatrix = np.empty((3, 100000), dtype=object)
-        self.dubinsmat = np.empty((3, 100000), dtype=object)
+        #self.dubinsmat = np.empty((3, 100000), dtype=object)
+        self.dubinsmat = {}
 
         self.uncertaintymatrix = uncertaintymatrix
 
@@ -117,7 +118,7 @@ class IRrtStar:
         startlen=0 # for checking node increase
         for k in range(self.iter_max):
             #time.sleep(0.1)
-            if k>=100-3: #only evaluate from when we might want it to stop #TODO make 400 a variable
+            if k>=300-3: #only evaluate from when we might want it to stop #TODO make 400 a variable
                 cost = {node: node.totalcost for node in self.X_soln}
                 info = {node: node.totalinfo for node in self.X_soln}
                 #x_best = min(cost, key=cost.get)
@@ -132,9 +133,9 @@ class IRrtStar:
                 else:
                     count_down=20 #reset
                     print("reset countdown")
-            if k==101: # to test up to certain iteration
+            if k==301: # to test up to certain iteration
                 count_down=0
-            if count_down<=0 and k>100:
+            if count_down<=0 and k>300:
                 print("Reached stopping criterion at iteration "+str(k))
                 break # we stop iterating if the best score is not improving much anymore and we already passed at least ... cycles
 
@@ -199,7 +200,7 @@ class IRrtStar:
                             node_new.parent = x_near #added
                             #node_new.info = self.Info(node_new)
                             if self.kinematic=="dubins":
-                                node_new.info = dubinsinfo
+                                node_new.info = x_near.info+ dubinsinfo
                             else:
                                 node_new.info = self.Info_cont(node_new)
                             self.V.append(node_new) #generate a "node"/trajectory to each near point
@@ -237,6 +238,7 @@ class IRrtStar:
                 #     self.Rewiring_after(self.x_best)
 
         self.path = self.ExtractPath(x_best)
+        #[self.path,nodes] = self.ExtractPath(x_best)
         #for point in reversed(x_best.infopath):
         #    print("infopoint (x,y)=("+str(point[0])+","+str(point[1])+")")
         #print("length of infopath: "+str(len(x_best.infopath)+len(x_best.lastinfopath)))
@@ -293,6 +295,8 @@ class IRrtStar:
             divider = make_axes_locatable(ax)
             cax = divider.append_axes("right", size="5%", pad=0.05)
             plt.colorbar(im, cax=cax)
+            # for node in nodes:
+            #     ax.plot(node[0], node[1], marker=(8, 2, 0),color="blue", linewidth=3, markersize=20)
             ax.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
             ax.set_title("Spatial distribution of uncertainty and final path")
             fig.tight_layout()
@@ -512,6 +516,10 @@ class IRrtStar:
                         else:
                             self.Recalculate(x_near,
                                          None)  # recalculates the cost and info for nodes further down the path
+                    elif self.scenario==7: # always saving both copies (no matter whether the totalinfo improves)
+                        oldparent=x_temp
+                        self.Recalculate(x_near, oldparent)
+
                     else: #all scenarios except 1
                         oldparent=None
                         if x_temp.totalinfo>x_near.totalinfo:
@@ -541,6 +549,7 @@ class IRrtStar:
                         x_temp.cost = node.cost
                         x_temp.totalinfo = node.totalinfo
                         x_temp.totalcost = node.totalcost
+
 
                 # Scenario 2:
                 if self.scenario==2:
@@ -589,6 +598,17 @@ class IRrtStar:
                             self.V.append(x_temp)
                         # possibly: tab next line
                         oldparent=x_temp
+
+                # scneario 7:
+                if self.scenario==7: # always saving both copies and taking the oldparent with us
+                    x_temp = Node((node.x, node.y))
+                    x_temp.parent = prevparent
+                    x_temp.info = node.info
+                    x_temp.cost = node.cost
+                    x_temp.totalinfo = node.totalinfo
+                    x_temp.totalcost = node.totalcost
+                    self.V.append(x_temp)
+                    oldparent = x_temp
                 self.Recalculate(node,oldparent)
 
     def Rewiring_after(self, best_node): #rewiring afterwards
@@ -597,10 +617,15 @@ class IRrtStar:
         print(" Info: " + str(self.x_best.info) + " Tot. info: " + str(
             self.x_best.totalinfo) + " Cost: " + str(self.x_best.totalcost))
         bestpath=[]
+        infosteps=[]
         node=best_node
-        while node.parent!=self.x_start:
+        while node!=self.x_start:
             bestpath.append(node)
+            #new (top 10)
+            infosteps.append(node.info-node.parent.info)
+
             node=node.parent
+
 
 
         totalinfo = self.x_best.totalinfo
@@ -621,8 +646,9 @@ class IRrtStar:
                 #if node.parent != self.x_start and node != self.x_start:  # because otherwise there's no "old" path to go back to
                 c_old = node.cost
                 if self.kinematic == "dubins":
-                    [cost, info] = self.dubins(node, x_near, False)
-                    c_new = x_near.cost + cost
+                    #[cost, info] = self.dubins(node, x_near, False)
+                    c_new = x_near.cost + self.dubinsnomatrix(node.parent.parent,x_near,True)[0] + self.dubinsnomatrix(node,x_near,True)[0]
+
                 else:
                     c_new = node.parent.parent.cost + self.Line(node.parent.parent, x_near) + self.Line(node,
                                                                                                            x_near)
@@ -650,7 +676,16 @@ class IRrtStar:
                             self.LastPath(newnode)
                         info = newnode.info + self.FindInfo(x_near.x, x_near.y, node.x, node.y, newnode,
                                                             self.search_radius, True)
-
+                    if self.kinematic=="dubins":
+                        newnode = Node((x_near.x, x_near.y))
+                        newnode.parent = node.parent.parent
+                        addnew = True
+                        if addnew:
+                            [cost, info, infopath] = self.dubinsnomatrix(node.parent.parent, x_near, False)
+                            newnode.info = node.parent.parent.info + info
+                            newnode.cost = node.parent.parent.cost + cost
+                            self.LastPath(newnode)
+                        info = newnode.info + self.dubinsnomatrix(newnode, node, False)[1]
                     # info += x_near.parent.parent.info
 
                     info_old = node.info
@@ -754,8 +789,9 @@ class IRrtStar:
         dist = min(self.step_len-self.reduction, dist)
         notfinished=True
         while notfinished and dist>=0:
-            node_new = Node((math.floor(x_start.x + dist * math.cos(theta)),
-                             math.floor(x_start.y + dist * math.sin(theta))))
+            xpos = min(99,(math.floor(x_start.x + dist * math.cos(theta))))
+            ypos = min(99,(math.floor(x_start.y + dist * math.sin(theta))))
+            node_new = Node((xpos,ypos))
             if not np.isnan(self.uncertaintymatrix[node_new.y,node_new.x]) and self.Line(x_start,node_new)<=(self.step_len-self.reduction):
                 dist = self.Line(x_start,node_new)
                 notfinished=False # to prevent sampling in obstacle and sampling too far due to rounding
@@ -828,46 +864,50 @@ class IRrtStar:
             path.append([node.x, node.y])  # this should be the start
         if self.kinematic=="dubins" and node!=self.x_start:
             path = []
-            maxc = 2
-
-
-            sx = self.x_goal.x
-            sy = self.x_goal.y
-            syaw = self.anglematrix[node.y * 100 + node.x, self.x_goal.y * 100 + self.x_goal.x]+math.pi
-            if syaw >= 2 * math.pi:
-                syaw = syaw - 2 * math.pi
-            #[syaw,int] = self.roundAngle(syaw)
-            gx = node.x
-            gy = node.y
-            gyaw = self.anglematrix[node.parent.y*100 + node.parent.x,node.y * 100 + node.x]
-            #[gyaw,int] = self.roundAngle(gyaw)
-
-            # new (21/4)
-            if [gx-sx, gy-sy, gyaw] not in self.dubinsmat[
-                0].tolist():  # relative position + end angle
-                [dubinspath, self.dubinsmat, infopathrel] = dubins.calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, maxc,
-                                                                                    self.dubinsmat)
-                cost = dubinspath.L
-                dubins_rel_x = dubinspath.x
-                dubins_rel_y = dubinspath.y
-                for i in range(len(self.dubinsmat[0])):
-                    if self.dubinsmat[0, i] == None:
-                        self.dubinsmat[0, i] = [gx-sx, gy-sy, gyaw]
-                        self.dubinsmat[1, i] = [dubinspath.L, dubinspath.x, dubinspath.y, infopathrel]
-                        # add = True
-                        # index = i
-                        # print("new index added in dubinsmatrix")
-                        break;
-            else:
-                index = self.dubinsmat[0].tolist().index([gx-sx, gy-sy, gyaw])
-                #index = np.where(self.dubinsmat[0]==[gx-sx, gy-sy, gyaw])
-
-                [cost, dubins_rel_x, dubins_rel_y, infopathrel] = self.dubinsmat[1][index]
-
-            dubins_x = dubins_rel_x + sx
-            dubins_y = dubins_rel_y + sy # note: the algorithm adds and detracts sx,sy instead of gx,gy
+            totalcost = 0 # just for checking/debugging now
+            [cost, angle, dubins_x, dubins_y, infopath] = self.getDubins(node, self.x_goal)
+            totalcost+=cost
+            # maxc = 2
+            #
+            #
+            # sx = self.x_goal.x
+            # sy = self.x_goal.y
+            # syaw = self.anglematrix[node.y * 100 + node.x, self.x_goal.y * 100 + self.x_goal.x]+math.pi
+            # if syaw >= 2 * math.pi:
+            #     syaw = syaw - 2 * math.pi
+            # #[syaw,int] = self.roundAngle(syaw)
+            # gx = node.x
+            # gy = node.y
+            # gyaw = self.anglematrix[node.parent.y*100 + node.parent.x,node.y * 100 + node.x]
+            # #[gyaw,int] = self.roundAngle(gyaw)
+            #
+            # # new (21/4)
+            # if [gx-sx, gy-sy, gyaw] not in self.dubinsmat[
+            #     0].tolist():  # relative position + end angle
+            #     [dubinspath, self.dubinsmat, infopathrel] = dubins.calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, maxc,
+            #                                                                         self.dubinsmat)
+            #     cost = dubinspath.L
+            #     dubins_rel_x = dubinspath.x
+            #     dubins_rel_y = dubinspath.y
+            #     for i in range(len(self.dubinsmat[0])):
+            #         if self.dubinsmat[0, i] == None:
+            #             self.dubinsmat[0, i] = [gx-sx, gy-sy, gyaw]
+            #             self.dubinsmat[1, i] = [dubinspath.L, dubinspath.x, dubinspath.y, infopathrel]
+            #             # add = True
+            #             # index = i
+            #             # print("new index added in dubinsmatrix")
+            #             break;
+            # else:
+            #     index = self.dubinsmat[0].tolist().index([gx-sx, gy-sy, gyaw])
+            #     #index = np.where(self.dubinsmat[0]==[gx-sx, gy-sy, gyaw])
+            #
+            #     [cost, dubins_rel_x, dubins_rel_y, infopathrel] = self.dubinsmat[1][index]
+            #
+            # dubins_x = dubins_rel_x + sx
+            # dubins_y = dubins_rel_y + sy # note: the algorithm adds and detracts sx,sy instead of gx,gy
             for i in range(len(dubins_x)):
-                path.append([dubins_x[-i],dubins_y[-i]])
+                #path.append([dubins_x[-(i+1)],dubins_y[-(i+1)]])
+                path.append([dubins_x[i], dubins_y[i]])
 
             #print(dubins_x)
             # infopathnode = []
@@ -876,7 +916,8 @@ class IRrtStar:
 
 
 
-
+            nodes = []
+            nodes.append([node.x,node.y])
 
 
             # old:
@@ -886,42 +927,58 @@ class IRrtStar:
             #     pathpart = []
             #     pathpart.append([dubinspath.x[i], dubinspath.y[i]])
             #     path.extend(pathpart[::-1])
+
+            node_child=node
             node=node.parent
+            lastangle=0
             last= False
+            #print(path)
             while node.parent or last:
-                sx = gx
-                sy = gy
-                syaw=gyaw
-                gx = node.x
-                gy= node.y
-                if not last:
-                    gyaw = self.anglematrix[node.parent.y*100 + node.parent.x,node.y * 100 + node.x] + math.pi
-                    #[gyaw, int] = self.roundAngle(gyaw)
-                else:
-                    gyaw = syaw
-                #print(gyaw)
-                if gyaw >= 2 * math.pi:
-                    gyaw = gyaw - 2 * math.pi
+                nodes.append([node.x, node.y])
 
-                # old:
-                # [dubinspath,self.dubinsmatrix,infopath] = dubins.calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, maxc, self.dubinsmatrix)
-                # for i in range((len(dubinspath.x))):
-                #     pathpart=[]
-                #     pathpart.append([dubinspath.x[i],dubinspath.y[i]])
-                #     path.extend(pathpart[::-1])
+                print(node.x,node.y,node_child.x,node_child.y)
+                [cost, angleparent, dubins_x, dubins_y, infopath] = self.getDubins(node, node_child,last,lastangle)
+                node_child=node
+                totalcost += cost
 
-
-                # new:
-                index = self.dubinsmat[0].tolist().index([gx - sx, gy - sy, gyaw])
-
-                #index = np.where(self.dubinsmat[0]==[gx-sx, gy-sy, gyaw])
-
-                [cost, dubins_rel_x, dubins_rel_y, infopathrel] = self.dubinsmat[1][index]
-                dubins_x = dubins_rel_x + sx
-                dubins_y = dubins_rel_y + sy  # note: the algorithm adds and detracts sx,sy instead of gx,gy
+                #
+                # sx = gx
+                # sy = gy
+                # syaw=gyaw
+                # gx = node.x
+                # gy= node.y
+                # if not last:
+                #     gyaw = self.anglematrix[node.parent.y*100 + node.parent.x,node.y * 100 + node.x] + math.pi
+                #     #[gyaw, int] = self.roundAngle(gyaw)
+                # else:
+                #     gyaw = syaw
+                # #print(gyaw)
+                # if gyaw >= 2 * math.pi:
+                #     gyaw = gyaw - 2 * math.pi
+                #
+                # # old:
+                # # [dubinspath,self.dubinsmatrix,infopath] = dubins.calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, maxc, self.dubinsmatrix)
+                # # for i in range((len(dubinspath.x))):
+                # #     pathpart=[]
+                # #     pathpart.append([dubinspath.x[i],dubinspath.y[i]])
+                # #     path.extend(pathpart[::-1])
+                #
+                #
+                # # new:
+                # index = self.dubinsmat[0].tolist().index([gx - sx, gy - sy, gyaw])
+                #
+                # #index = np.where(self.dubinsmat[0]==[gx-sx, gy-sy, gyaw])
+                #
+                # [cost, dubins_rel_x, dubins_rel_y, infopathrel] = self.dubinsmat[1][index]
+                # dubins_x = dubins_rel_x + sx
+                # dubins_y = dubins_rel_y + sy  # note: the algorithm adds and detracts sx,sy instead of gx,gy
                 for i in range(len(dubins_x)):
-                    path.append([dubins_x[-i], dubins_y[-i]])
+                    #path.append([dubins_x[-(i+1)], dubins_y[-(i+1)]])
+                    path.append([dubins_x[i],dubins_y[i]])
+                #print(path)
 
+                if not last:
+                    lastangle = self.anglematrix[node.parent.y * 100 + node.parent.x, node.y * 100 + node.x] + math.pi
 
                 node = node.parent
                 if last:
@@ -930,10 +987,10 @@ class IRrtStar:
                     last = True
 
                 #node = Node((0,0))
-                #print(path)
-
+            print("Totalcost: "+str(totalcost))
 
         return path
+        #return path, nodes
 
     def InGoalRegion(self, node):
         #if self.Line(node, self.x_goal) < self.step_len:
@@ -969,6 +1026,7 @@ class IRrtStar:
         #node.totalinfo=node.info+self.FindInfo(node.x,node.y,self.x_start.x,self.x_start.y,node,self.step_len,True)
         if self.kinematic=="dubins":
             [cost,info,infopath] = self.dubinsnomatrix(node,self.x_goal)
+
             node.totalcost=node.cost+cost
             node.totalinfo=node.info+info
         else:
@@ -1046,10 +1104,11 @@ class IRrtStar:
                 self.FindInfo(node_end.x,node_end.y,node_start.x,node_start.y,node_start,distance,False) # to check whether the path passes through obstacles/edges
 
         # Ranger kinematic constraints: taking time to turn
-        # if self.kinematic=="ranger":
-        #   if node_start.parent:
-        #         dangle = (self.anglematrix[node_start.parent.y*100 + node_start.parent.x,node_start.y*100 + node_start.x]-angle)**2# squared difference in angle between the line segments
-        #       distance+=dangle
+        if self.kinematic=="ranger":
+          if node_start.parent:
+                angularcost = 1 # how much cost per rad
+                dangle = (self.anglematrix[node_start.parent.y*100 + node_start.parent.x,node_start.y*100 + node_start.x]-angle)**2# squared difference in angle between the line segments
+                distance+=dangle*angularcost
 
         # Limited angle kinematic constraint
         if self.kinematic=="limit":
@@ -1070,66 +1129,9 @@ class IRrtStar:
 
         return distance, angle
     def dubinsnomatrix(self, node_start, node_end, costOnly=False): # to get info and cost for dubins kinematic constraints (=smooth trajectory)
-        angle = self.anglematrix[node_start.y * 100 + node_start.x, node_end.y * 100 + node_end.x]
-
-        if not angle:
-            # if node_end.angle==-1 or (not costOnly):
-            #print("starting dubins cost")
-            dx = node_end.x - node_start.x
-            dy = node_end.y - node_start.y
-            [syaw, int] = self.roundAngle(math.atan2(dy, dx))
-            self.anglematrix[node_start.y * 100 + node_start.x, node_end.y * 100 + node_end.x]=syaw
-            angle=syaw
+        [cost,angle,dubins_x,dubins_y,infopathnode] = self.getDubins(node_start,node_end)
         path = []
-        maxc = 2
 
-
-        sx = node_end.x
-        sy = node_end.y
-        syaw = self.anglematrix[node_start.y * 100 + node_start.x, node_end.y * 100 + node_end.x]+math.pi
-        if syaw>=2*math.pi:
-            syaw=syaw-2*math.pi
-        #[syaw,int] = self.roundAngle(syaw)
-        gx = node_start.x
-        gy = node_start.y
-        if not node_start.parent:
-            gyaw = syaw
-        else:
-            gyaw = self.anglematrix[node_start.parent.y*100 + node_start.parent.x,node_start.y * 100 + node_start.x]
-        #[gyaw,int] = self.roundAngle(gyaw)
-
-        ## new part (21/4)
-        # [node_end.x-node_start.x, node_end.y-node_start.y, gyaw]
-        if [gx-sx, gy-sy, gyaw] not in self.dubinsmat[0].tolist(): # relative position + end angle
-            [dubinspath, self.dubinsmat, infopathrel] = dubins.calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, maxc,
-                                                                                    self.dubinsmat)
-            cost = dubinspath.L
-            dubins_rel_x = dubinspath.x
-            dubins_rel_y = dubinspath.y
-            for i in range(len(self.dubinsmat[0])):
-                if self.dubinsmat[0, i] == None:
-                    self.dubinsmat[0, i] = [gx-sx, gy-sy, gyaw]
-                    self.dubinsmat[1, i] = [dubinspath.L,dubinspath.x,dubinspath.y,infopathrel]
-                    # add = True
-                    # index = i
-                    #print("new index added in dubinsmatrix")
-                    break;
-        else:
-            index = self.dubinsmat[0].tolist().index([gx-sx, gy-sy, gyaw])
-            #index = np.where(self.dubinsmat[0] == [gx - sx, gy - sy, gyaw])
-
-            [cost,dubins_rel_x,dubins_rel_y,infopathrel] = self.dubinsmat[1][index]
-
-        # if costOnly:
-        #     return cost, gyaw
-        # else:
-            # dubins_x = dubins_rel_x[:, 0] + gx
-            # dubins_y = dubins_rel_y[:, 1] + gy # note: the algorithm adds and detracts sx,sy instead of gx,gy
-        infopathnode=[]
-        for cell in infopathrel:
-            infopathnode.append([cell[0]+sx,cell[1]+sy])
-        #print(infopathrel)
-        #print(infopathnode)
 
 
         # old (21/4)
@@ -1139,53 +1141,60 @@ class IRrtStar:
         info=0
         if not node_start.parent==self.x_start and not node_start.parent==None:
             node=node_start.parent
+            node_child=node_start
             #print(node.x,node.y)
             last= False
+            lastangle=0
             while node.parent or last:
-                sx = gx
-                sy = gy
-                syaw=gyaw
-                gx = node.x
-                gy= node.y
+                [costparent, angleparent, dubins_xparent, dubins_yparent, infopath] = self.getDubins(node, node_child,last,lastangle)
+                node_child=node
+                path.extend(infopath)
+                # sx = gx
+                # sy = gy
+                # syaw=gyaw
+                # gx = node.x
+                # gy= node.y
+                # if not last:
+                #     gyaw = self.anglematrix[node.parent.y*100 + node.parent.x,node.y * 100 + node.x] + math.pi
+                #     #[gyaw, int] = self.roundAngle(gyaw)
+                # else:
+                #     gyaw = syaw
+                # if gyaw >= 2 * math.pi:
+                #     gyaw = gyaw - 2 * math.pi
+                # #print(gyaw)
+                #
+                # #old:
+                # # [dubinspath,self.dubinsmatrix, infopath] = dubins.calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, maxc, self.dubinsmatrix)
+                # # for infocell in infopath:
+                # #     path.append(infocell)
+                # #new:
+                # # still figure out why first part is necessary (should be in there already)
+                # if [gx - sx, gy - sy, gyaw] not in self.dubinsmat[0].tolist():  # relative position + end angle
+                #     [dubinspath, self.dubinsmat, infopathrel] = dubins.calc_dubins_path(sx, sy, syaw, gx, gy, gyaw,
+                #                                                                         maxc,
+                #                                                                         self.dubinsmat)
+                #     cost = dubinspath.L
+                #     dubins_rel_x = dubinspath.x
+                #     dubins_rel_y = dubinspath.y
+                #     for i in range(len(self.dubinsmat[0])):
+                #         if self.dubinsmat[0, i] == None:
+                #             self.dubinsmat[0, i] = [gx - sx, gy - sy, gyaw]
+                #             self.dubinsmat[1, i] = [dubinspath.L, dubinspath.x, dubinspath.y, infopathrel]
+                #             # add = True
+                #             # index = i
+                #             #print("new index added in dubinsmatrix")
+                #             break;
+                # index = self.dubinsmat[0].tolist().index([gx-sx, gy-sy, gyaw])
+                # #index = np.where(self.dubinsmat[0]==[gx-sx, gy-sy, gyaw])
+                #
+                # #print(index)
+                # #print(self.dubinsmat[1][index])
+                # [cost, dubins_rel_x, dubins_rel_y, infopathrel] = self.dubinsmat[1][index]
+                # for cell in infopathrel:
+                #     path.append([cell[0] + sx, cell[1] + sy])
+                #
                 if not last:
-                    gyaw = self.anglematrix[node.parent.y*100 + node.parent.x,node.y * 100 + node.x] + math.pi
-                    #[gyaw, int] = self.roundAngle(gyaw)
-                else:
-                    gyaw = syaw
-                if gyaw >= 2 * math.pi:
-                    gyaw = gyaw - 2 * math.pi
-                #print(gyaw)
-
-                #old:
-                # [dubinspath,self.dubinsmatrix, infopath] = dubins.calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, maxc, self.dubinsmatrix)
-                # for infocell in infopath:
-                #     path.append(infocell)
-                #new:
-                # still figure out why first part is necessary (should be in there already)
-                if [gx - sx, gy - sy, gyaw] not in self.dubinsmat[0].tolist():  # relative position + end angle
-                    [dubinspath, self.dubinsmat, infopathrel] = dubins.calc_dubins_path(sx, sy, syaw, gx, gy, gyaw,
-                                                                                        maxc,
-                                                                                        self.dubinsmat)
-                    cost = dubinspath.L
-                    dubins_rel_x = dubinspath.x
-                    dubins_rel_y = dubinspath.y
-                    for i in range(len(self.dubinsmat[0])):
-                        if self.dubinsmat[0, i] == None:
-                            self.dubinsmat[0, i] = [gx - sx, gy - sy, gyaw]
-                            self.dubinsmat[1, i] = [dubinspath.L, dubinspath.x, dubinspath.y, infopathrel]
-                            # add = True
-                            # index = i
-                            #print("new index added in dubinsmatrix")
-                            break;
-                index = self.dubinsmat[0].tolist().index([gx-sx, gy-sy, gyaw])
-                #index = np.where(self.dubinsmat[0]==[gx-sx, gy-sy, gyaw])
-
-                #print(index)
-                #print(self.dubinsmat[1][index])
-                [cost, dubins_rel_x, dubins_rel_y, infopathrel] = self.dubinsmat[1][index]
-                for cell in infopathrel:
-                    path.append([cell[0] + sx, cell[1] + sy])
-
+                    lastangle = self.anglematrix[node.parent.y * 100 + node.parent.x, node.y * 100 + node.x] + math.pi
 
                 node = node.parent
                 if last:
@@ -1194,12 +1203,14 @@ class IRrtStar:
                 elif not node.parent:
                     last = True
 
+
             #node = Node((0,0))
         for infocell in infopathnode:
             if infocell not in path:
-                info += self.uncertaintymatrix[infocell[1], infocell[0]]
                 if np.isnan(self.uncertaintymatrix[infocell[1], infocell[0]]):
                     cost=np.inf
+                    break;
+                info += self.uncertaintymatrix[infocell[1], infocell[0]]
             path.append(infocell)
 
         if costOnly:
@@ -1208,66 +1219,76 @@ class IRrtStar:
         # print(path)
         return cost,info,path
 
-    def getDubins(self,node_start,node_end):
-        print("getDubinsfunction")
-        angle = self.anglematrix[node_start.y * 100 + node_start.x, node_end.y * 100 + node_end.x]
+    def getDubins(self,node_start,node_end,last=False,lastangle=0):
+        #print("getDubinsfunction")
+        #print(last)
+        if last:
+            angle=lastangle
+        else:
+            angle = self.anglematrix[node_start.y * 100 + node_start.x, node_end.y * 100 + node_end.x]
 
-        if not angle:
-            # if node_end.angle==-1 or (not costOnly):
-            # print("starting dubins cost")
-            dx = node_end.x - node_start.x
-            dy = node_end.y - node_start.y
-            [syaw, int] = self.roundAngle(math.atan2(dy, dx))
-            self.anglematrix[node_start.y * 100 + node_start.x, node_end.y * 100 + node_end.x] = syaw
-            angle = syaw
-        path = []
-        maxc = 2
+            if not angle:
+                # if node_end.angle==-1 or (not costOnly):
+                # print("starting dubins cost")
+                dx = node_end.x - node_start.x
+                dy = node_end.y - node_start.y
+                [syaw, int] = self.roundAngle(math.atan2(dy, dx))
+                self.anglematrix[node_start.y * 100 + node_start.x, node_end.y * 100 + node_end.x] = syaw
+                angle = syaw
+        maxc = 0.5
 
         sx = node_end.x
         sy = node_end.y
-        syaw = self.anglematrix[node_start.y * 100 + node_start.x, node_end.y * 100 + node_end.x] + math.pi
+        if last:
+            syaw=lastangle
+        else:
+            syaw = self.anglematrix[node_start.y * 100 + node_start.x, node_end.y * 100 + node_end.x] + math.pi
         if syaw >= 2 * math.pi:
             syaw = syaw - 2 * math.pi
         # [syaw,int] = self.roundAngle(syaw)
         gx = node_start.x
         gy = node_start.y
-        if not node_start.parent:
+        if (not node_start.parent) or last:
             gyaw = syaw
         else:
-            gyaw = self.anglematrix[node_start.parent.y * 100 + node_start.parent.x, node_start.y * 100 + node_start.x]
+            gyaw = self.anglematrix[node_start.parent.y * 100 + node_start.parent.x, node_start.y * 100 + node_start.x] + math.pi
         # [gyaw,int] = self.roundAngle(gyaw)
-
+        #print(syaw,gyaw,last, (not node_start.parent))
         ## new part (21/4)
         # [node_end.x-node_start.x, node_end.y-node_start.y, gyaw]
-        if [gx - sx, gy - sy, gyaw] not in self.dubinsmat[0].tolist():  # relative position + end angle
+        if (gx - sx, gy - sy, gyaw) not in self.dubinsmat:  # relative position + end angle
+        #if [gx - sx, gy - sy, gyaw] not in self.dubinsmat[0].tolist():  # relative position + end angle
             [dubinspath, self.dubinsmat, infopathrel] = dubins.calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, maxc,
                                                                                 self.dubinsmat)
             cost = dubinspath.L
             dubins_rel_x = dubinspath.x
             dubins_rel_y = dubinspath.y
-            for i in range(len(self.dubinsmat[0])):
-                if self.dubinsmat[0, i] == None:
-                    self.dubinsmat[0, i] = [gx - sx, gy - sy, gyaw]
-                    self.dubinsmat[1, i] = [dubinspath.L, dubinspath.x, dubinspath.y, infopathrel]
-                    # add = True
-                    # index = i
-                    # print("new index added in dubinsmatrix")
-                    break;
+            # for i in range(len(self.dubinsmat[0])):
+            #     if self.dubinsmat[0, i] == None:
+            #         self.dubinsmat[0, i] = [gx - sx, gy - sy, gyaw]
+            #         self.dubinsmat[1, i] = [dubinspath.L, dubinspath.x, dubinspath.y, infopathrel]
+            #         # add = True
+            #         # index = i
+            #         # print("new index added in dubinsmatrix")
+            #         break;
+            self.dubinsmat[(gx - sx, gy - sy, gyaw)]=[dubinspath.L, dubinspath.x, dubinspath.y, infopathrel]
         else:
-            index = self.dubinsmat[0].tolist().index([gx - sx, gy - sy, gyaw])
+            #print("reusing the dubinsmat")
+            #index = self.dubinsmat[0].tolist().index([gx - sx, gy - sy, gyaw])
+            #index = self.dubinsmat.index([gx - sx, gy - sy, gyaw])
             # index = np.where(self.dubinsmat[0] == [gx - sx, gy - sy, gyaw])
 
-            [cost, dubins_rel_x, dubins_rel_y, infopathrel] = self.dubinsmat[1][index]
+            [cost, dubins_rel_x, dubins_rel_y, infopathrel] = self.dubinsmat[(gx - sx, gy - sy, gyaw)]
 
         # if costOnly:
         #     return cost, gyaw
         # else:
-        dubins_x = dubins_rel_x[:, 0] + gx
-        dubins_y = dubins_rel_y[:, 1] + gy # note: the algorithm adds and detracts sx,sy instead of gx,gy
+        dubins_x = dubins_rel_x + sx
+        dubins_y = dubins_rel_y + sy # note: the algorithm adds and detracts sx,sy instead of gx,gy
         infopath = []
         for cell in infopathrel:
             infopath.append([cell[0] + sx, cell[1] + sy])
-        return cost,dubins_x,dubins_y,infopath
+        return cost,angle,dubins_x,dubins_y,infopath
 
     def dubins(self, node_start, node_end, costOnly=False): # to get info and cost for dubins kinematic constraints (=smooth trajectory)
         # the matrices probably take too much memory
@@ -1361,8 +1382,9 @@ class IRrtStar:
             angle+=2*math.pi
         while angle>=2*math.pi:
             angle-=2*math.pi
-        int = round(angle*10/(2*math.pi))
-        rounded = int*2*math.pi/10
+        int = round(angle*8/(2*math.pi))
+        rounded = int*2*math.pi/8
+        #print(rounded/math.pi)
 
         return rounded, int
     def animation(self):
@@ -1374,11 +1396,16 @@ class IRrtStar:
 
         if self.kinematic=="dubins":
             for node in self.V:
-                path = self.ExtractPath(node)
-                # if path!=[]:
-                #     print(path)
-                for i in range(len(path)-1):
-                    plt.plot([path[i][0], path[i+1][0]], [path[i][1], path[i+1][1]], "-g")
+                #path = self.ExtractPath(node)
+                if node!=self.x_start:
+                    [cost, angleparent, dubins_x, dubins_y, infopath] = self.getDubins(node.parent, node)
+                    path=[]
+                    for i in range(len(dubins_x)):
+                        path.append([dubins_x[i], dubins_y[i]])
+                    # if path!=[]:
+                    #     print(path)
+                    for i in range(0,len(path)-10,10):
+                        plt.plot([path[i][0], path[i+10][0]], [path[i][1], path[i+10][1]], "-g")
         elif not self.kinematic=="dubins":
             for node in self.V:
                 if node.parent:
@@ -1481,7 +1508,7 @@ def main(uncertaintymatrix,scenario=3):
     #x_goal = (37, 18)  # Goal node
     x_goal = (50,50)
 
-    rrt_star = IRrtStar(x_start, x_goal, 30, 0.0, 15, 2000,uncertaintymatrix,scenario)
+    rrt_star = IRrtStar(x_start, x_goal, 15, 0.0, 15, 2000,uncertaintymatrix,scenario)
     [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration]=rrt_star.planning()
 
     return finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration

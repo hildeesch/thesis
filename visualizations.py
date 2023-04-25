@@ -20,6 +20,8 @@ from shapely.geometry import Point, Polygon
 fig,ax=plt.subplots()
 #ax.plot((np.random.rand(10)),(np.random.rand(10)))
 plt.ylim((0,10))
+plt.xticks([0,1,2,3,4,5,6,7,8,9,10])
+plt.yticks([0,1,2,3,4,5,6,7,8,9,10])
 plt.xlim((0,10))
 
 linepoints = np.array([])
@@ -44,18 +46,21 @@ def onkey(event):
         color=str("--"+color[1])
     elif event.key=="z":
         color="-b"
+        draw="line"
     elif event.key=="a":
         draw="angle"
         print(draw)
     elif event.key=="i":
         draw="line"
         print("line")
+    elif event.key=="j":
+        draw="line_nonode"
     elif event.key=="g": # happens automatically
         print("Changing grid style")
     elif event.key=="q": # happens automatically
         print("Quit plot")
     else:
-        print("No recognized option. Options: 'b' for blue, 'k' for black, 'v' for green, 'r' for red, 'd' for dotted, 'z' for reset or 'g' to change gridstyle")
+        print("No recognized option. Options: 'b' for blue, 'k' for black, 'v' for green, 'r' for red, 'd' for dotted, 'z' for reset, \n'a' for angle, 'i' for line, 'j' for line without nodes, or 'g' to change gridstyle")
 
 
 
@@ -129,8 +134,9 @@ def onclick(event):
             #print(linepoints[2])
             #print(linepoints[3])
             ax.plot([linepoints[0],linepoints[2]],[linepoints[1],linepoints[3]],color)
-            ax.plot(linepoints[0],linepoints[1], "-k", marker="o",markersize=5)
-            ax.plot(linepoints[2],linepoints[3], "-k", marker="o",markersize=5)
+            if draw=="line":
+                ax.plot(linepoints[0],linepoints[1], "-k", marker="o",markersize=5)
+                ax.plot(linepoints[2],linepoints[3], "-k", marker="o",markersize=5)
 
             linepoints=np.array([])
             plt.show()
