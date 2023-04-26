@@ -125,7 +125,7 @@ def print_hi(name):
     tests=True
     results=[]
     if tests:
-        scenario=7
+        scenario=1
         print("Without uncertainty all over")
         while scenario<=7:
             [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix,scenario)
