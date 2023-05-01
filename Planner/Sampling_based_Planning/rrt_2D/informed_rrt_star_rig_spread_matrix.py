@@ -71,8 +71,8 @@ class IRrtStar:
 
         self.budget=200
         self.scenario=scenario
-        self.kinematic = "reedsshepp" # kinematic constraint
-        # choices: "none", "dubins", "reedsshepp", "ranger", "limit"
+        self.kinematic = "dubinsrev" # kinematic constraint
+        # choices: "none", "dubins", "dubinsrev", "reedsshepp", "ranger", "limit"
         #self.dubinsmatrix = np.empty((3, 100000), dtype=object)
         #self.dubinsmat = np.empty((3, 100000), dtype=object)
         self.dubinsmat = {}
@@ -82,7 +82,7 @@ class IRrtStar:
         self.x_best = self.x_start # just for now, remove later
 
 
-        if self.kinematic=="dubins" or self.kinematic=="reedsshepp":
+        if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev":
             print("dubins/ reedsshepp")
             # self.costmatrix = np.empty((100 * 100 * 8, 100 * 100))
             # self.anglematrix = np.empty((100 * 100 * 8, 100 * 100))
@@ -136,9 +136,9 @@ class IRrtStar:
                 else:
                     count_down=20 #reset
                     print("reset countdown")
-            if k==151: # to test up to certain iteration
+            if k==51: # to test up to certain iteration
                 count_down=0
-            if count_down<=0 and k>150:
+            if count_down<=0 and k>50:
                 print("Reached stopping criterion at iteration "+str(k))
                 break # we stop iterating if the best score is not improving much anymore and we already passed at least ... cycles
 
@@ -184,7 +184,7 @@ class IRrtStar:
                     #if x_new and not self.utils.is_collision(x_near, x_new):
 
                     if not self.utils.is_collision(x_near, x_new):
-                        if self.kinematic=="dubins" or self.kinematic=="reedsshepp":
+                        if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev":
                             #[dubinscost,dubinsinfo] = self.dubins(x_near,x_new)
                             [dubinscost,dubinsinfo,infopath] = self.dubinsnomatrix(x_near,x_new)
                             c_min = x_near.cost + dubinscost
@@ -202,7 +202,7 @@ class IRrtStar:
                             node_new.cost = c_min #+self.Line(x_new, self.x_goal)
                             node_new.parent = x_near #added
                             #node_new.info = self.Info(node_new)
-                            if self.kinematic=="dubins" or self.kinematic=="reedsshepp":
+                            if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev":
                                 node_new.info = x_near.info+ dubinsinfo
                             else:
                                 node_new.info = self.Info_cont(node_new)
@@ -248,14 +248,14 @@ class IRrtStar:
                     # self.x_best = max(info, key=info.get)
                     # print("Best node after rewiring: tot. info: "+str(x_best.totalinfo)+" Cost: "+str(x_best.totalcost))
 
-        self.path = self.ExtractPath(x_best)
-        #[self.path,nodes] = self.ExtractPath(x_best)
+        #self.path = self.ExtractPath(x_best)
+        [self.path,nodes] = self.ExtractPath(x_best)
         #for point in reversed(x_best.infopath):
         #    print("infopoint (x,y)=("+str(point[0])+","+str(point[1])+")")
         #print("length of infopath: "+str(len(x_best.infopath)+len(x_best.lastinfopath)))
 
         node = x_best
-        if self.kinematic!="dubins" and self.kinematic!="reedsshepp":
+        if self.kinematic!="dubins" and self.kinematic!="reedsshepp" and self.kinematic!="dubinsrev":
             infopathlength = len(self.infopathmatrix[node.y * 100 + node.x, self.x_goal.y * 100 + self.x_goal.x])
             finalpath = self.infopathmatrix[node.y * 100 + node.x, self.x_goal.y * 100 + self.x_goal.x]
             checkcostscore = self.Line(node, self.x_goal)
@@ -306,8 +306,9 @@ class IRrtStar:
             divider = make_axes_locatable(ax)
             cax = divider.append_axes("right", size="5%", pad=0.05)
             plt.colorbar(im, cax=cax)
-            # for node in nodes:
-            #     ax.plot(node[0], node[1], marker=(8, 2, 0),color="blue", linewidth=3, markersize=20)
+            for node in nodes:
+                ax.plot(node[0], node[1], marker=(8, 2, 0),color="blue", linewidth=3, markersize=20)
+            ax.plot(x_best.x, x_best.y, marker=(8, 2, 0), color="green", linewidth=3, markersize=20)
             ax.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
             ax.set_title("Spatial distribution of uncertainty and final path")
             fig.tight_layout()
@@ -369,7 +370,7 @@ class IRrtStar:
         #     return info
     def Rewiring(self, x_near,x_new):
         c_near = x_near.cost
-        if self.kinematic=="dubins" or self.kinematic=="reedsshepp":
+        if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev":
             [cost,info] = self.dubins(x_new, x_near, False)
             c_new = x_new.cost + cost
         else:
@@ -378,7 +379,7 @@ class IRrtStar:
         if x_new.parent.x==x_near.x and x_new.parent.y==x_near.y:
             return # if the parent of x_new = x_near, we don't want to make the parent of x_near = x_new (because then we create a loose segment
         if c_new < c_near:
-            if not self.kinematic=="dubins" and not self.kinematic=="reedsshepp":
+            if not self.kinematic=="dubins" and not self.kinematic=="reedsshepp" and not self.kinematic=="dubinsrev":
                 info = self.FindInfo(x_near.x,x_near.y,x_new.x,x_new.y,x_new,self.search_radius,True)
 
             info += x_new.info
@@ -441,7 +442,7 @@ class IRrtStar:
     def Rewiringv2(self, x_near,x_new): #not changing the whole parent path but only changing the direct parent and then returning to the "old" path
         if x_near.parent != self.x_start and x_near != self.x_start: # because otherwise there's no "old" path to go back to
             c_near = x_near.cost
-            if self.kinematic=="dubins" or self.kinematic=="reedsshepp":
+            if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev":
                 #[cost,info] = self.dubins(x_new, x_near, False)
                 [cost,info,infopath] = self.dubinsnomatrix(x_new, x_near, False)
                 c_new = x_new.cost + cost
@@ -469,7 +470,7 @@ class IRrtStar:
                         newnode.cost = x_near.parent.parent.cost + self.Line(x_near.parent.parent, x_new)
                         self.LastPath(newnode)
                     info = newnode.info + self.FindInfo(x_new.x,x_new.y,x_near.x,x_near.y,newnode,self.search_radius,True)
-                if self.kinematic=="dubins" or self.kinematic=="reedsshepp":
+                if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev":
                     newnode = Node((x_new.x, x_new.y))
                     newnode.parent = x_near.parent.parent
                     addnew=True
@@ -574,7 +575,7 @@ class IRrtStar:
                     if node==self.x_best:
                         previnfo=node.info
                         prevtotalinfo=node.totalinfo
-                    if self.kinematic=="dubins" or self.kinematic=="reedsshepp":
+                    if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev":
                         #[dist,info] = self.dubins(parent,node)
                         [dist,info] = self.dubinsnomatrix(parent,node,True)
                         node.info = parent.info + info
@@ -685,7 +686,7 @@ class IRrtStar:
                             self.LastPath(newnode)
                         info = newnode.info + self.FindInfo(x_near.x, x_near.y, node.x, node.y, newnode,
                                                             self.search_radius, True)
-                    if self.kinematic=="dubins" or self.kinematic=="reedsshepp":
+                    if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev":
                         newnode = Node((x_near.x, x_near.y))
                         newnode.parent = node.parent.parent
                         addnew = True
@@ -839,7 +840,7 @@ class IRrtStar:
                             self.LastPath(newnode)
                         info = newnode.info + self.FindInfo(x_near.x, x_near.y, node.x, node.y, newnode,
                                                             self.search_radius, True)
-                    if self.kinematic=="dubins" or self.kinematic=="reedsshepp":
+                    if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev":
                         newnode = Node((x_near.x, x_near.y))
                         newnode.parent = node.parent.parent
                         addnew = True
@@ -962,7 +963,7 @@ class IRrtStar:
             dist-=1
         #node_new.parent = x_start
 
-        if self.kinematic=="dubins" or self.kinematic=="reedsshepp":
+        if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev":
             #dist = self.dubins(x_start,node_new,True)
             [dist,angle] = self.dubinsnomatrix(x_start,node_new,True)
 
@@ -1019,14 +1020,14 @@ class IRrtStar:
             print("Final cost: "+str(node.totalcost))
             print("Final info value: "+str(node.totalinfo))
         path=[]
-        if not self.kinematic=="dubins" and not self.kinematic=="reedsshepp":
+        if not self.kinematic=="dubins" and not self.kinematic=="reedsshepp" and not self.kinematic=="dubinsrev":
             path = [[self.x_goal.x, self.x_goal.y]]
 
             while node.parent:
                 path.append([node.x, node.y])
                 node = node.parent
             path.append([node.x, node.y])  # this should be the start
-        if (self.kinematic=="dubins" or self.kinematic=="reedsshepp") and node!=self.x_start:
+        if (self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev") and node!=self.x_start:
             path = []
             totalcost = 0 # just for checking/debugging now
             [cost, angle, dubins_x, dubins_y, infopath] = self.getDubins(node, self.x_goal)
@@ -1153,8 +1154,8 @@ class IRrtStar:
                 #node = Node((0,0))
             print("Totalcost: "+str(totalcost))
 
-        return path
-        #return path, nodes
+        #return path
+        return path, nodes
 
     def InGoalRegion(self, node):
         #if self.Line(node, self.x_goal) < self.step_len:
@@ -1188,7 +1189,7 @@ class IRrtStar:
 
     def LastPath(self,node):
         #node.totalinfo=node.info+self.FindInfo(node.x,node.y,self.x_start.x,self.x_start.y,node,self.step_len,True)
-        if self.kinematic=="dubins" or self.kinematic=="reedsshepp":
+        if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev":
             [cost,info,infopath] = self.dubinsnomatrix(node,self.x_goal)
 
             node.totalcost=node.cost+cost
@@ -1246,7 +1247,7 @@ class IRrtStar:
 
     #@staticmethod
     def get_distance_and_angle(self,node_start, node_end):
-        if self.kinematic=="dubins" or self.kinematic=="reedsshepp":
+        if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev":
             #return self.dubins(node_start,node_end,False)
             return self.dubinsnomatrix(node_start,node_end,True)
         distance = self.costmatrix[node_start.y*100+node_start.x,node_end.y*100+node_end.x]
@@ -1425,6 +1426,25 @@ class IRrtStar:
             if self.kinematic=="dubins":
                 [dubinspath, self.dubinsmat, infopathrel] = dubins.calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, maxc,
                                                                             self.dubinsmat)
+            elif self.kinematic=="dubinsrev":
+                if gyaw<math.pi:
+                    if (syaw-gyaw)**2> (syaw-(gyaw+math.pi))**2:
+                        #print("reverse angle is smaller")
+                        gyaw=gyaw+math.pi
+                        [dubinspath, infopathrel] = reedsshepp.calc_optimal_path(sx, sy, syaw, gx, gy, gyaw,
+                                                                                            maxc)
+                    else:
+                        [dubinspath, infopathrel] = reedsshepp.calc_optimal_path(sx, sy, syaw, gx, gy, gyaw,
+                                                                                            maxc)
+                else:
+                    if (syaw-gyaw)**2> (syaw-(gyaw-math.pi))**2:
+                        #print("reverse angle is smaller")
+                        gyaw=gyaw-math.pi
+                        [dubinspath, infopathrel] = reedsshepp.calc_optimal_path(sx, sy, syaw, gx, gy, gyaw,
+                                                                                            maxc)
+                    else:
+                        [dubinspath, infopathrel] = reedsshepp.calc_optimal_path(sx, sy, syaw, gx, gy, gyaw,
+                                                                                            maxc)
             elif self.kinematic=="reedsshepp":
                 [dubinspath, infopathrel] = reedsshepp.calc_optimal_path(sx, sy, syaw, gx, gy, gyaw, maxc)
             cost = dubinspath.L
@@ -1563,7 +1583,7 @@ class IRrtStar:
             'key_release_event',
             lambda event: [exit(0) if event.key == 'escape' else None])
 
-        if self.kinematic=="dubins" or self.kinematic=="reedsshepp":
+        if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev":
             for node in self.V:
                 #path = self.ExtractPath(node)
                 if node!=self.x_start:
@@ -1575,7 +1595,7 @@ class IRrtStar:
                     #     print(path)
                     for i in range(0,len(path)-10,10):
                         plt.plot([path[i][0], path[i+10][0]], [path[i][1], path[i+10][1]], "-g")
-        elif not self.kinematic=="dubins" and not self.kinematic=="reedsshepp":
+        elif not self.kinematic=="dubins" and not self.kinematic=="reedsshepp" and not self.kinematic=="dubinsrev":
             for node in self.V:
                 if node.parent:
                     plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-g")
