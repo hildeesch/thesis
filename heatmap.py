@@ -26,7 +26,7 @@ def withrows(matrix,plantdist,rowdist,show=True):
     row_edges = [] # to keep track of the left and right edges of each row
     for rows in range(0,100,rowdist):
         for columns in range(0,100,plantdist):
-            if heatmatrix[rows, columns] == 0.0:
+            if matrix[rows, columns] == 0.0:
                 heatmatrix[rows,columns]=1.0
                 if rows not in row_nrs:
                     row_nrs.append(rows)

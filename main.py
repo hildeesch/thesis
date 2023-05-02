@@ -84,7 +84,7 @@ def print_hi(name):
 
     time_start = time.time()
     field_matrix = polygon("hexagon",False)
-    [heat_matrix,row_nrs,row_edges] = withrows(field_matrix,2,4,False)
+    [heat_matrix,row_nrs,row_edges] = withrows(field_matrix,2,1,False)
     #heat_matrix = norows(field_matrix,2,False)
     #show_map(matrix_nonconvex)
     #heat_matrix = withrows(matrix_square,2,4,True)
@@ -112,7 +112,7 @@ def print_hi(name):
     print(np.nansum(uncertainty_matrix))
     #rig(uncertainty_matrix)
     #[finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix)
-    #[finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_rows_matrix(uncertainty_matrix,row_nrs,row_edges)
+    [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_rows_matrix(uncertainty_matrix,row_nrs,row_edges)
 
     #print("sum entropy = "+str(np.nansum(uncertainty_matrix)))
 

@@ -79,10 +79,16 @@ class IRrtStar:
         self.X_soln = set()
         self.path = None
 
+        self.x_best = self.x_start
+
         self.reductioncount = 0 # to count the shortening of range in Near()
         self.reduction = 0
 
         self.budget=250
+        self.scenario = 1
+        self.kinematic = "none"  # kinematic constraint
+        # choices: "none", "dubins", "dubinsrev", "reedsshepp", "ranger", "limit"
+
         self.uncertaintymatrix = uncertaintymatrix
         self.row_nrs = row_nrs
         self.row_edges = row_edges
@@ -109,6 +115,7 @@ class IRrtStar:
         # 0 = sample, 1 = nearest, 2 = steer, 3 = near, 4 = rewiring, 5 = lastpath, 6 = pruning, 7 = total time
 
         self.maze = np.ones((100,100) ) # for A star
+        self.edgemaze = np.ones((100,100)) # for A star (to know where we can go up/down)
 
 
     def init(self):
@@ -133,6 +140,14 @@ class IRrtStar:
         # ax.set_title("A star maze")
         # fig.tight_layout()
         # plt.show()
+        # fig, ax = plt.subplots()
+        # colormap = cm.Greys
+        # colormap.set_bad(color='black')
+        # im = ax.imshow(self.edgemaze, cmap=colormap, vmin=0, vmax=1, origin='lower')
+        #
+        # ax.set_title("A star maze")
+        # fig.tight_layout()
+        # plt.show()
         return x_best
 
     def planning(self):
@@ -147,7 +162,7 @@ class IRrtStar:
         totalstarttime=time.time()
         for k in range(self.iter_max):
             #time.sleep(0.1)
-            if k>=300-3: #only evaluate from when we might want it to stop
+            if k>50-3: #only evaluate from when we might want it to stop
                 #print("Start countdown")
                 cost = {node: node.totalcost for node in self.X_soln}
                 info = {node: node.totalinfo for node in self.X_soln}
@@ -162,7 +177,9 @@ class IRrtStar:
                 else:
                     count_down=10 #reset
                     print("Reset countdown")
-            if count_down<=0 and k>150:
+            if k==101: # to test up to certain iteration
+                count_down=0
+            if count_down<=0 and k>100:
                 print("Reached stopping criterion at iteration "+str(k))
                 break # we stop iterating if the best score is not improving much anymore and we already passed at least ... cycles
 
@@ -209,12 +226,6 @@ class IRrtStar:
                             node_new.info = self.Info_cont(node_new)
                             self.V.append(node_new) #generate a "node"/trajectory to each near point
 
-                            #rewire
-                            for x_near in self.Near(self.V,x_new,self.search_radius):
-                                timestart=time.time()
-                                self.Rewiring(x_near,node_new)
-                                timeend = time.time()
-                                self.time[4] += (timeend - timestart)
 
                             if self.InGoalRegion(node_new):
                                 if not self.utils.is_collision(node_new, self.x_goal):
@@ -229,10 +240,21 @@ class IRrtStar:
                 timeend = time.time()
                 self.time[6] += (timeend - timestart)
 
-            if k % 10 == 0 and show:
+            if k % 50 == 0 and show:
                 self.animation()
                 self.time[7] = time.time()-totalstarttime
                 print(self.time)
+                if k>0:
+                    print("It.: " + str(k) + " Time: " + str(self.time[7]) + " Info: " + str(x_best.info) + " Tot. info: "+str(x_best.totalinfo) + " Cost: " + str(x_best.totalcost) + " Nodes: "+str(len(self.V)))
+                    # for i in range(10): # rewire the 10 best nodes
+                    #     info = {node: node.totalinfo for node in self.X_soln}
+                    #     #self.x_best = max(info, key=info.get)
+                    #     curnode = sorted(info, key=info.get)[-(i+1)]
+                    #     self.Rewiring_afterv2(curnode)
+                    # #self.Rewiring_after(self.x_best)
+                    # info = {node: node.totalinfo for node in self.X_soln}
+                    # self.x_best = max(info, key=info.get)
+                    # print("Best node after rewiring: tot. info: "+str(x_best.totalinfo)+" Cost: "+str(x_best.totalcost))
 
         self.path = self.ExtractPath(x_best)
         node = x_best
@@ -264,6 +286,17 @@ class IRrtStar:
         if show:
             self.animation()
             plt.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
+            node = x_best
+            while node.parent:
+                # reachedparent=False
+                prevpoint = [node.x, node.y]
+                infopath = self.infopathmatrix[node.parent.y * 100 + node.parent.x, node.y * 100 + node.x]
+                for point in infopath[::-1]:
+                    # reachedparent= (point[0]==node.parent.x and point[1]==node.parent.y)
+
+                    plt.plot([point[0], prevpoint[0]], [point[1], prevpoint[1]], "-b")
+                    prevpoint = point
+                node = node.parent
             #plt.plot([x for x, _ in self.infopathmatrix[x_best.y*100+x_best.x][self.x_goal.y*100+self.x_goal.x]],[y for _, y in self.infopathmatrix[x_best.y*100+x_best.x][self.x_goal.y*100+self.x_goal.x]],'-b')
             #plt.plot(x_best.x, x_best.y, "bs", linewidth=3)
 
@@ -325,6 +358,12 @@ class IRrtStar:
         # index_start = the index of the edge node from which we come
         # index_end = the index of the edge node to which we go
         for index in range(len(self.row_nrs)-1):
+            self.maze[self.row_nrs[index],self.row_edges[index][0]]=0
+            self.maze[self.row_nrs[index],self.row_edges[index][1]]=0
+            self.edgemaze[self.row_nrs[index],self.row_edges[index][0]]=0
+            self.edgemaze[self.row_nrs[index],self.row_edges[index][1]]=0
+
+        for index in range(len(self.row_nrs)-1):
             self.cost_left[index][index+1] = math.hypot(self.row_nrs[index + 1] - self.row_nrs[index],
                          self.row_edges[index + 1][0] - self.row_edges[index][0])  # note: this distance is not really in the y-direction, but from edge to edge point
             self.cost_left[index+1][index] = self.cost_left[index][index+1]
@@ -340,6 +379,11 @@ class IRrtStar:
             #for A star:
             for gridpoint in infopath:
                 self.maze[gridpoint[1],gridpoint[0]]=0
+                self.edgemaze[gridpoint[1],gridpoint[0]]=0
+                width_path=1
+                for i in range(width_path):
+                    self.maze[gridpoint[1], gridpoint[0]+(i+1)] = 0
+                    self.edgemaze[gridpoint[1], gridpoint[0]+(i+1)] = 0
 
             self.cost_right[index][index+1] = math.hypot(self.row_nrs[index + 1] - self.row_nrs[index],
                          self.row_edges[index + 1][1] - self.row_edges[index][1])  # note: this distance is not really in the y-direction, but from edge to edge point
@@ -356,6 +400,12 @@ class IRrtStar:
             #for A star:
             for gridpoint in infopath:
                 self.maze[gridpoint[1],gridpoint[0]]=0
+                self.edgemaze[gridpoint[1],gridpoint[0]]=0
+
+                width_path=1
+                for i in range(width_path):
+                    self.maze[gridpoint[1], gridpoint[0]-(i+1)] = 0
+                    self.edgemaze[gridpoint[1], gridpoint[0]-(i+1)] = 0
 
         for index1 in range(len(self.row_nrs)):
             for index2 in range(len(self.row_nrs)):
@@ -410,7 +460,8 @@ class IRrtStar:
             start_value += 1
         return path, current_node.g
 
-    def search(self,maze, start, end):
+    def search(self,maze, edgemaze, start, end):
+        #TODO: why do we pass maze/ edgemaze as arguments (while they're in the self)
         """
             Returns a list of tuples as a path from the given start to the given end in the given maze
             :param maze:
@@ -448,10 +499,11 @@ class IRrtStar:
                 [0, -1,1.0],  # go left
                 [-1, 0,1.0],  # go down
                 [0, 1,1.0],  # go right
-                [1, 1,1.0],
-                [-1, 1,1.0],
-                [1, -1,1.0],
-                [-1,-1,1.0]]
+                [1, 1,math.sqrt(2)], # up right
+                [-1, 1,math.sqrt(2)], # down right
+                [1, -1,math.sqrt(2)], # up left
+                [-1,-1,math.sqrt(2)] # down left
+                ]
 
         """
             1) We first get the current node by comparing all f cost and selecting the lowest cost node for further expansion
@@ -522,12 +574,14 @@ class IRrtStar:
                     continue
 
                 # Make sure walkable terrain
-                if maze[node_position[1]][node_position[0]] != 0: #or (node_position[0]==end[0] and node_position[1]==end[1])
+                # note: if .. continue means: if the statement returns true, we skip the rest of the loop
+                # two conditions: if the position is not within the rows/edges or if the position is changing in y position while it's not on "edge" terrain
+                if maze[node_position[1]][node_position[0]] != 0 or (new_position[1]!=0 and (edgemaze[node_position[1]][node_position[0]]!=0 or edgemaze[current_node.position[1]][current_node.position[0]]!=0)): #or (node_position[0]==end[0] and node_position[1]==end[1])
                     continue
 
                 # Create new node
                 new_node = NodeA(current_node, node_position)
-
+                new_node.g = current_node.g + cost
                 # Append
                 children.append(new_node)
 
@@ -539,14 +593,15 @@ class IRrtStar:
                     continue
 
                 # Create the f, g, and h values
-                child.g = current_node.g + cost
+                #child.g = current_node.g + cost
                 ## Heuristic costs calculated here, this is using eucledian distance
-                child.h = (((child.position[0] - end_node.position[0]) ** 2) +
-                          ((child.position[1] - end_node.position[1]) ** 2))
-                # child.h = (min((((child.position[0] + end_node.position[0]-60))),(((100-child.position[0] + 100-end_node.position[0]-60))))**2+
-                #            (((child.position[1] - end_node.position[1])))**2)
-                child.h = ((abs(child.position[0] - end_node.position[0])) +
-                           (abs(child.position[1] - end_node.position[1])))**2
+                # child.h = (((child.position[0] - end_node.position[0]) ** 2) +
+                #           ((child.position[1] - end_node.position[1]) ** 2)) # manhattan: overestimates
+
+                # child.h = ((abs(child.position[0] - end_node.position[0])) +
+                #            (abs(child.position[1] - end_node.position[1])))**2 # euclidean
+                #child.h=0 # dijkstra --> no heuristic
+                child.h = (abs(child.position[1] - end_node.position[1]))**2
                 #child.h  = (child.position[0]**2+(abs(child.position[1] - end_node.position[1]))**2)
                 child.f = child.g + child.h
 
@@ -558,6 +613,9 @@ class IRrtStar:
                 yet_to_visit_list.append(child)
 
         print("Reached end of A* without solution, maze(start)="+str(self.maze[start[1],start[0]])+" maze(end)="+str(self.maze[end[1],end[0]]))
+        print("Start location: ("+str(start[0])+","+str(start[1])+")")
+        print("End location: ("+str(end[0])+","+str(end[1])+")")
+        return [],np.inf
     def FindCostInfoA(self, node_end_x, node_end_y, node_start_x, node_start_y, node, totalpath=True, costOnly=False):
         # node_end = the goal or new node
         # node_start = the (potential) parent
@@ -581,7 +639,8 @@ class IRrtStar:
             #end = [node_start_x+20,node_start_y]
             #print(start +end)
 
-            [infopath,cost] = self.search(self.maze, start, end)
+            [infopath,cost] = self.search(self.maze, self.edgemaze, start, end)
+
             infopathnew = []
             # for location in infopath:
             #     infopathnew.append(location)
@@ -604,12 +663,16 @@ class IRrtStar:
             # fig.tight_layout()
             # plt.show()
 
-            if not costOnly:
-                for infopoint in infopath:
-                    info += self.uncertaintymatrix[infopoint[1], infopoint[0]]
-                    self.infomatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = info
-                    self.infomatrix[
-                        node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = info  # mirror the matrix
+            #if not costOnly:
+            for infopoint in infopath:
+                if np.isnan(self.uncertaintymatrix[infopoint[1], infopoint[0]]):
+                    cost=np.inf
+                    break;
+                info += self.uncertaintymatrix[infopoint[1], infopoint[0]]
+
+                self.infomatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = info
+                self.infomatrix[
+                    node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = info  # mirror the matrix
 
             self.costmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = cost
             self.costmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = cost #mirror the matrix
@@ -617,20 +680,20 @@ class IRrtStar:
             self.infopathmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = infopath
             self.infopathmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = infopath[::-1]
 
-            for index, infopoint in enumerate(infopath):
-                if infopoint[1]==node_start_y:
-                    self.costmatrix[infopoint[1]*100+infopoint[0], node_end_y*100 + node_end_x] = cost-index
-                    self.costmatrix[node_end_y * 100 + node_end_x,infopoint[1]*100+infopoint[0]] = cost-index
-
-                else:
-                    break;
-            for index, infopoint in enumerate(infopath[::-1]):
-                if infopoint[1]==node_end_y:
-                    self.costmatrix[infopoint[1]*100+infopoint[0], node_start_y*100 + node_start_x] = cost-index
-                    self.costmatrix[node_start_y * 100 + node_start_x,infopoint[1]*100+infopoint[0]] = cost-index
-
-                else:
-                    break;
+            # for index, infopoint in enumerate(infopath):
+            #     if infopoint[1]==node_start_y:
+            #         self.costmatrix[infopoint[1]*100+infopoint[0], node_end_y*100 + node_end_x] = cost-index
+            #         self.costmatrix[node_end_y * 100 + node_end_x,infopoint[1]*100+infopoint[0]] = cost-index
+            #
+            #     else:
+            #         break;
+            # for index, infopoint in enumerate(infopath[::-1]):
+            #     if infopoint[1]==node_end_y:
+            #         self.costmatrix[infopoint[1]*100+infopoint[0], node_start_y*100 + node_start_x] = cost-index
+            #         self.costmatrix[node_start_y * 100 + node_start_x,infopoint[1]*100+infopoint[0]] = cost-index
+            #
+            #     else:
+            #         break;
         # else:
         #     print("reusing known costs")
         if costOnly:
@@ -828,10 +891,11 @@ class IRrtStar:
                     ypoint = node_end_y
                     #if [xpoint,
                     #    ypoint] not in currentinfopath:  # only info value when the point is not already monitored before
-                    info += self.uncertaintymatrix[ypoint, xpoint]
                     if np.isnan(self.uncertaintymatrix[ypoint, xpoint]):
                         self.costmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = np.inf
                         self.costmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = np.inf # mirror the matrix
+                    else:
+                        info += self.uncertaintymatrix[ypoint, xpoint]
                     infopath.append([xpoint, ypoint])
 
             self.infomatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = info
@@ -857,7 +921,235 @@ class IRrtStar:
                     infonode+=self.uncertaintymatrix[element[1],element[0]]
         return cost,infonode
         #return [cost,infopath,info]
+    def Rewiring_afterv2(self, best_node): #rewiring afterwards
+        # goal: gain more info while remaining within the budget
+        print("Start rewiring after v2")
+        print(" Info: " + str(best_node.info) + " Tot. info: " + str(
+            best_node.totalinfo) + " Cost: " + str(best_node.totalcost))
+        bestpath=[]
+        infosteps=[]
+        node=best_node
+        while node!=self.x_start:
+            # copynode = deepcopy(node) # just now
+            # self.V.append(copynode)
+            # if len(bestpath)>0:
+            #     bestpath[-1].parent=copynode # just now
+            # bestpath.append(copynode) # just now
+            bestpath.append(node)
+            infosteps.append(node.info-node.parent.info)
+            # the infosteps contain the added info for the parent to the node (of that node)
 
+            node=node.parent
+        # bestpath[-1].parent=self.x_start # just now
+
+
+        pastindexes = []
+        totalinfo = best_node.totalinfo
+        notfinished = True
+        sortedinfo = sorted(infosteps)
+
+        i=1
+        print("Len path: "+str(len(bestpath)))
+        while notfinished:
+            bestindex = infosteps.index(sortedinfo[-1])
+            sortindex=1
+            while (bestindex in pastindexes) or (bestindex==len(bestpath)-1):
+                sortindex+=1
+                if sortindex >= len(bestpath):  # we have had every piece
+                    notfinished = False
+                    print("Completed rewiring v2")
+                    break;
+                bestindex = infosteps.index(sortedinfo[-sortindex])
+
+            if not notfinished: # to prevent an extra loop
+                break;
+            pastindexes.append(bestindex)
+            node = bestpath[bestindex]
+            # so we rewire the part that is at the moment most profitable
+
+            print("Best index: "+str(bestindex))
+            print(node.parent.parent.x, node.parent.parent.y)
+
+            #for x_near in self.Near(self.V, node, self.search_radius):
+            for x_near in self.Near(self.V, node, 10):
+                x_temp = Node((node.x, node.y))
+                x_temp.parent = node.parent
+                x_temp.info = node.info
+                x_temp.cost = node.cost
+                x_temp.totalinfo = node.totalinfo
+                x_temp.totalcost = node.totalcost
+
+                #if node.parent != self.x_start and node != self.x_start:  # because otherwise there's no "old" path to go back to
+                c_old = node.cost
+                if self.kinematic == "dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev":
+                    #TODO
+                    #[cost, info] = self.dubins(node, x_near, False)
+                    c_new = node.parent.parent.cost + self.dubinsnomatrix(node.parent.parent,x_near,True)[0] + self.dubinsnomatrix(node,x_near,True)[0]
+
+                else:
+                    # c_new = node.parent.parent.cost + self.Line(node.parent.parent, x_near) + self.Line(node,
+                    #                                                                                        x_near)
+                    [cost, info] = self.FindCostInfoA(node.parent.parent.x, node.parent.parent.y, x_near.x, x_near.y, node.parent.parent, True)
+                    cost2 = self.FindCostInfoA(x_near.x, x_near.y, node.x, node.y, node.parent.parent, True,True)
+                    c_new = node.parent.parent.cost + cost + cost2
+
+                # if x_new.parent.x==x_near.x and x_new.parent.y==x_near.y:
+                #     return # if the parent of x_new = x_near, we don't want to make the parent of x_near = x_new (because then we create a loose segment
+                if (c_new-c_old) < (self.budget-best_node.totalcost): # still within budget
+                    if not self.kinematic == "dubins" and not self.kinematic=="reedsshepp" and not self.kinematic=="dubinsrev":
+                        newnode = Node((x_near.x, x_near.y))
+                        newnode.parent = node.parent.parent
+                        addnew = True
+                        # for node in self.V[::-1]: # to prevent adding doubles
+                        #     if node.parent==newnode.parent and node.x==newnode.x and node.y==newnode.y:
+                        #         newnode=node
+                        #         addnew = False
+                        #         break
+                        if addnew:
+                            newnode.info = node.parent.parent.info + info
+                            newnode.cost = node.parent.parent.cost + cost
+                            self.LastPath(newnode)
+                        info = newnode.info + self.FindCostInfoA(newnode.x, newnode.y, node.x, node.y, newnode, True)[1]
+                    if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev":
+                        #TODO (dubins part etc)
+                        newnode = Node((x_near.x, x_near.y))
+                        newnode.parent = node.parent.parent
+                        addnew = True
+                        if addnew:
+                            [cost, info, infopath] = self.dubinsnomatrix(node.parent.parent, x_near, False)
+                            newnode.info = node.parent.parent.info + info
+                            newnode.cost = node.parent.parent.cost + cost
+                            self.LastPath(newnode)
+                        info = newnode.info + self.dubinsnomatrix(newnode, node, False)[1]
+                    # info += x_near.parent.parent.info
+
+                    info_old = node.info
+
+                    info_new = info
+                    if info_new >= info_old:  # note: this is different than the condition in pruning
+                        if addnew:
+                            self.V.append(newnode)
+
+                        # rewiring:
+
+                        node.parent = newnode
+                        node.info = info_new
+                        node.cost = c_new
+                        self.LastPath(node)  # also recalculate the last info part
+
+
+                        # Scenario 1:
+                        # else:
+                        self.Recalculate(node,
+                                         None)  # recalculates the cost and info for nodes further down the path
+                        if totalinfo>=best_node.totalinfo:
+                            # reverse rewiring
+                            node.parent = x_temp.parent
+                            node.info = x_temp.info
+                            node.cost = x_temp.cost
+                            node.totalinfo = x_temp.totalinfo
+                            node.totalcost = x_temp.totalcost
+                            self.Recalculate(node,None)
+                        else:
+                            bestpath[bestindex + 1] = newnode
+
+                            print("Improved path through hindsight rewiring with increase in info: "+str(best_node.totalinfo-totalinfo))
+                            totalinfo=best_node.totalinfo
+                        # # bit of debugging:
+                        # thisnode=x_new
+                        # while thisnode.parent:
+                        #     thisnode=thisnode.parent
+                        # if not (thisnode.x==self.x_start.x and thisnode.y==self.x_start.y):
+                        #     print("WARNING WARNING WARNING LOOSE END LOOSE END LOOSE END LOOSE END LOOSE END LOOSE END AT X_NEAR = ("+str(x_near.x)+","+str(x_near.y)+")")
+
+                        # x_near.infopath = infopath
+                        # print("Rewiring took place!!")
+                    else:
+                        del newnode
+                # else:
+                #     notfinished=False
+            # i+=1
+            # if i==len(bestpath):
+            #     notfinished=False
+        print("End rewiring after v2")
+        print(" Info: " + str(best_node.info) + " Tot. info: " + str(
+            best_node.totalinfo) + " Cost: " + str(best_node.totalcost))
+
+    def Recalculate(self,parent, prevparent=None):
+        for node in self.V:  # to recalculate the cost and info for nodes further down the line
+            if node.parent == parent:
+                # Scenario 3:
+                if self.scenario==3 or self.scenario==6:
+                    if not prevparent==None:
+                        # saving temporary node to compare the total info values (TODO: check if deepcopy is faster than assigning all the node parameters)
+                        x_temp = Node((node.x, node.y))
+                        x_temp.parent = prevparent
+                        x_temp.info = node.info
+                        x_temp.cost = node.cost
+                        x_temp.totalinfo = node.totalinfo
+                        x_temp.totalcost = node.totalcost
+
+
+                # Scenario 2:
+                if self.scenario==2:
+                # if the old one had a higher total value, we change the parent to the old (the copy) #TODO check how valid this is
+                    if not prevparent==None:
+                        node.parent=prevparent
+
+                #if prevparent==None:
+                #if True: #adapted scenario 3
+                if self.scenario==3 or self.scenario==4 or self.scenario==1: #recalculating
+                    if node==self.x_best:
+                        previnfo=node.info
+                        prevtotalinfo=node.totalinfo
+                    if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev":
+                        #[dist,info] = self.dubins(parent,node)
+                        [dist,info] = self.dubinsnomatrix(parent,node,True)
+                        node.info = parent.info + info
+                    else:
+                        #dist = self.Line(parent, node)
+                        [dist,info] = self.FindCostInfoA(parent.x, parent.y, node.x, node.y, parent, True)
+
+                        node.info = parent.info + info
+
+                    node.cost = parent.cost + dist
+
+                    self.LastPath(node)
+
+                    # if node == self.x_best and node.totalinfo<prevtotalinfo:
+                    #     print("[RECALCULATE] Best node is removed, prev totinfo: " + str(
+                    #                 prevtotalinfo) + " Previnfo: " + str(previnfo) + " New totinfo: " + str(
+                    #                 node.totalinfo) + " Newinfo: " + str(node.info))
+                oldparent=None
+                # scenario 3
+                if self.scenario==3:
+                    if not prevparent==None:
+                        #if x_temp.totalinfo>node.totalinfo:
+                        self.V.append(x_temp)
+                        # possibly: tab next line
+                        oldparent=x_temp
+                    #     print("Totalinfo recalculating not increased, copy of old node added")
+                    # else:
+                    #     print("Totalinfo recalculating increased, copy of old node not added")
+                #only continue if the rewiring increased the totalinfo (prevparent==None)
+                if self.scenario==6:
+                    if not prevparent==None:
+                        if x_temp.totalinfo>node.totalinfo:
+                            self.V.append(x_temp)
+                        # possibly: tab next line
+                        oldparent=x_temp
+
+                # scneario 7:
+                if self.scenario==7: # always saving both copies and taking the oldparent with us
+                    x_temp = Node((node.x, node.y))
+                    x_temp.parent = prevparent
+                    x_temp.info = node.info
+                    x_temp.cost = node.cost
+                    x_temp.totalinfo = node.totalinfo
+                    x_temp.totalcost = node.totalcost
+                    self.V.append(x_temp)
+                    oldparent = x_temp
+                self.Recalculate(node,oldparent)
     def Rewiring(self, x_near, x_new):
         if x_new.parent.x == x_near.x and x_new.parent.y == x_near.y:
             return  # if the parent of x_new = x_near, we don't want to make the parent of x_near = x_new (because then we create a loose segment
@@ -885,7 +1177,7 @@ class IRrtStar:
                 #print("Rewiring took place!!")
                 self.Recalculate(x_near)  # recalculates the cost and info for nodes further down the path
 
-    def Recalculate(self,parent):
+    def Recalculate_old(self,parent):
         for node in self.V:  # to recalculate the cost and info for nodes further down the line
             if node.parent == parent:
                 [dist,info] = self.FindCostInfoA(node.x,node.y,node.parent.x,node.parent.y,parent,True)
@@ -1024,6 +1316,8 @@ class IRrtStar:
         return Node((int(xpoint),int(ypoint)))
 
     def Steer_section(self, x_start, x_goal): # with sectioning
+        #print("Steer start and end: nearest=(" + str(x_start.x) + "," + str(x_start.y) + ") - x_rand=(" + str(x_goal.x) + "," + str(
+        #    x_goal.y)+")")
         xpoint=x_start.x
         ypoint = x_start.y # just for debugging now
 
@@ -1059,8 +1353,11 @@ class IRrtStar:
         # step 1:
         dist = self.FindCostInfoA(self.row_edges[self.row_nrs.index(x_start.y)][boolright], self.row_nrs[self.row_nrs.index(x_start.y)], x_start.x, x_start.y,
                                      x_start, False, True)
+        #print("step 1 dist = "+str(dist))
+        #print("x position: "+str(self.row_edges[self.row_nrs.index(x_start.y)][boolright]))
+
         if dist>=self.step_len:
-            #print("step 1")
+            #print("step 1 (within start row)")
             # find point within start row
             xpoint=self.row_edges[self.row_nrs.index(x_start.y)][boolright]
             ypoint=self.row_nrs[self.row_nrs.index(x_start.y)]
@@ -1068,6 +1365,7 @@ class IRrtStar:
             while dist>self.step_len:
                 xpoint = self.row_edges[self.row_nrs.index(x_start.y)][boolright]-direction*step #note the - sign because we're going backwards on the path
                 ypoint = x_start.y
+                #print(xpoint,ypoint)
                 dist = self.FindCostInfoA(xpoint, ypoint, x_start.x, x_start.y,
                                      x_start, False, True)
                 step+=1
@@ -1080,12 +1378,14 @@ class IRrtStar:
             return Node((int(xpoint),int(ypoint)))
         # step 2:
 
-        dist = self.FindCostInfoA(self.row_edges[self.row_nrs.index(x_goal.y)][boolright], self.row_nrs[self.row_nrs.index(x_goal.y)], x_start.x, x_start.y,
+        dist = self.FindCostInfoA(self.row_edges[self.row_nrs.index(x_goal.y)][boolright], x_goal.y, x_start.x, x_start.y,
                                      x_start, False, True)
+        #print("step 2 dist = "+str(dist))
+        #print("x position: "+str(self.row_edges[self.row_nrs.index(x_goal.y)][boolright]))
         if dist>=self.step_len:
            xpoint = self.row_edges[self.row_nrs.index(x_goal.y)][boolright]
            ypoint = self.row_nrs[self.row_nrs.index(x_goal.y)]
-           #print("step 2")
+           #print("step 2 (on edge)")
            # find point on edge between start and end edge
            updown=-1
            if x_goal.y>x_start.y:
@@ -1107,7 +1407,7 @@ class IRrtStar:
 
         # step 3:
         # find point on end row
-        #print("step 3")
+        #print("step 3 (in end row)")
         dist = self.FindCostInfoA(x_goal.x,x_goal.y,x_start.x,x_start.y,x_start,False,True)
         xpoint = x_goal.x
         ypoint = x_goal.y
@@ -1116,6 +1416,7 @@ class IRrtStar:
             xpoint = x_goal.x + direction * step  # note the - sign because we're going backwards on the path
             ypoint = x_goal.y
             dist = self.FindCostInfoA(xpoint, ypoint, x_start.x, x_start.y, x_start, False, True)
+            #print("new dist = "+str(dist))
             step+=1
 
         if xpoint==x_start.x and ypoint==x_start.y:
@@ -1191,7 +1492,7 @@ class IRrtStar:
         return Node((location[0],location[1]))
 
     def ExtractPath(self, node):
-        print("Final cost: "+str(node.totalcost))
+        print("Final cost: "+str(node.totalcost)+" Cost without final part: "+str(node.cost))
         print("Final info value: "+str(node.totalinfo))
         #path = [[self.x_goal.x, self.x_goal.y]]
         path= []
@@ -1202,7 +1503,7 @@ class IRrtStar:
             node = node.parent
 
         #path.append([self.x_start.x, self.x_start.y])
-
+        print(path)
         return path
 
     def InGoalRegion(self, node):
@@ -1230,7 +1531,59 @@ class IRrtStar:
         return nodelist[int(np.argmin([self.FindCostInfoA(nd.x, nd.y, n.x, n.y, n, False, True) for nd in nodelist]))]
 
     def LastPath(self, node):
-        [cost,info] = self.FindCostInfoA(self.x_goal.x,self.x_goal.y,node.x,node.y,node,False)
+
+        #left:
+        distleft=0
+        infoleft=0
+        boolright=0
+        [dist, info] = self.FindCostInfoA(self.row_edges[self.row_nrs.index(node.y)][boolright],
+                                          self.row_nrs[self.row_nrs.index(node.y)], node.x, node.y,
+                                          node, False, False)
+        distleft+=dist
+        infoleft+=info
+        [dist, info] = self.FindCostInfoA(self.row_edges[self.row_nrs.index(node.y)][boolright],
+                                          self.row_nrs[self.row_nrs.index(node.y)], self.row_edges[self.row_nrs.index(self.x_goal.y)][boolright],
+                                          self.row_nrs[self.row_nrs.index(self.x_goal.y)],
+                                          node, False, False)
+        distleft += dist
+        infoleft += info
+        [dist,info] = self.FindCostInfoA(self.row_edges[self.row_nrs.index(self.x_goal.y)][boolright],
+                                  self.row_nrs[self.row_nrs.index(self.x_goal.y)], self.x_goal.x, self.x_goal.y,
+                                  node, False, False)
+        distleft += dist
+        infoleft += info
+
+        # right:
+        distright = 0
+        inforight = 0
+        boolright = 1
+        [dist, info] = self.FindCostInfoA(self.row_edges[self.row_nrs.index(node.y)][boolright],
+                                          self.row_nrs[self.row_nrs.index(node.y)], node.x, node.y,
+                                          node, False, False)
+        distright += dist
+        inforight += info
+        [dist, info] = self.FindCostInfoA(self.row_edges[self.row_nrs.index(node.y)][boolright],
+                                          self.row_nrs[self.row_nrs.index(node.y)],
+                                          self.row_edges[self.row_nrs.index(self.x_goal.y)][boolright],
+                                          self.row_nrs[self.row_nrs.index(self.x_goal.y)],
+                                          node, False, False)
+        distright += dist
+        inforight += info
+        [dist, info] = self.FindCostInfoA(self.row_edges[self.row_nrs.index(self.x_goal.y)][boolright],
+                                          self.row_nrs[self.row_nrs.index(self.x_goal.y)], self.x_goal.x, self.x_goal.y,
+                                          node, False, False)
+        distright += dist
+        inforight += info
+
+
+        if distleft<distright:
+            cost = distleft
+            info = infoleft
+        else:
+            cost = distright
+            info = inforight
+
+        #[cost,info] = self.FindCostInfoA(self.x_goal.x,self.x_goal.y,node.x,node.y,node,False)
         node.totalcost = node.cost + cost
         node.totalinfo = node.info + info
         #node.lastinfopath = lastinfopath
