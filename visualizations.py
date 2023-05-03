@@ -42,6 +42,8 @@ def onkey(event):
         color=str(color[0]+"b")
     elif event.key=="v":
         color=str(color[0]+"g")
+    elif event.key=="w":
+        color=str(color[0]+"w")
     elif event.key=="d":
         color=str("--"+color[1])
     elif event.key=="z":
@@ -60,7 +62,7 @@ def onkey(event):
     elif event.key=="q": # happens automatically
         print("Quit plot")
     else:
-        print("No recognized option. Options: 'b' for blue, 'k' for black, 'v' for green, 'r' for red, 'd' for dotted, 'z' for reset, \n'a' for angle, 'i' for line, 'j' for line without nodes, or 'g' to change gridstyle")
+        print("No recognized option. Options: 'b' for blue, 'k' for black, 'w' for white, 'v' for green, 'r' for red, 'd' for dotted, 'z' for reset, \n'a' for angle, 'i' for line, 'j' for line without nodes, or 'g' to change gridstyle")
 
 
 
@@ -133,7 +135,11 @@ def onclick(event):
             #print(linepoints[1])
             #print(linepoints[2])
             #print(linepoints[3])
-            ax.plot([linepoints[0],linepoints[2]],[linepoints[1],linepoints[3]],color)
+            if color[1]=="w":
+                linewidth=3
+            else:
+                linewidth=1.5
+            ax.plot([linepoints[0],linepoints[2]],[linepoints[1],linepoints[3]],color,linewidth=linewidth)
             if draw=="line":
                 ax.plot(linepoints[0],linepoints[1], "-k", marker="o",markersize=5)
                 ax.plot(linepoints[2],linepoints[3], "-k", marker="o",markersize=5)
