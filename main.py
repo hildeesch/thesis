@@ -4,6 +4,7 @@ from heatmap import withrows
 from heatmap import norows
 from heatmap import polygon
 from monitortreat import showpath
+from monitortreat import updatematrix
 from spreading import weedsspread
 from spreading import pathogenspread
 import numpy as np
@@ -84,24 +85,24 @@ def print_hi(name):
 
     time_start = time.time()
     field_matrix = polygon("hexagon",False)
-    [heat_matrix,row_nrs,row_edges] = withrows(field_matrix,2,1,False)
-    #heat_matrix = norows(field_matrix,2,False)
+    [plant_matrix,row_nrs,row_edges] = withrows(field_matrix,2,1,False)
+    #plant_matrix = norows(field_matrix,2,False)
     #show_map(matrix_nonconvex)
     #heat_matrix = withrows(matrix_square,2,4,True)
 
     pathogen1 = Pathogen(patchnr=2,infectionduration=4,spreadrange=3, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.3, saturation=5)
     #pathogen1 = Pathogen(patchnr=1,infectionduration=6,spreadrange=6, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.1, saturation=3) # one big patch
-    spread_matrix, uncertainty_matrix = pathogenspread(field_matrix,heat_matrix,pathogen1, True)
+    spread_matrix, uncertainty_matrix = pathogenspread(field_matrix,plant_matrix,pathogen1, True)
     #weed1 = Weed(patchnr=4,patchsize=7,spreadrange=3,reproductionrate=2,standarddeviation=1, saturation=1,plantattach=False)
-    #spread_matrix,uncertainty_matrix = weedsspread(field_matrix,heat_matrix,weed1, True)
-    del heat_matrix
+    #spread_matrix,uncertainty_matrix = weedsspread(field_matrix,plant_matrix,weed1, True)
+    #del plant_matrix
     #del spread_matrix #to save memory
     #np.save('uncertainty_matrixfile.npy',uncertainty_matrix)
     #np.save('uncertainty_matrixfile_small.npy', uncertainty_matrix)
     #uncertainty_matrix= np.load('uncertainty_matrixfile.npy')
-    uncertainty_matrix= np.load('uncertainty_matrixfile_small.npy')
-    print(np.nansum(uncertainty_matrix))
-    uncertainty_matrix[uncertainty_matrix==0]=0.001 # little bit of uncertainty all over the map
+    #uncertainty_matrix= np.load('uncertainty_matrixfile_small.npy')
+    #print(np.nansum(uncertainty_matrix))
+    #uncertainty_matrix[uncertainty_matrix==0]=0.001 # little bit of uncertainty all over the map
 
     #half uniform matrix:
     #uncertainty_matrix=deepcopy(field_matrix)
@@ -111,8 +112,10 @@ def print_hi(name):
     show_map(uncertainty_matrix)
     print(np.nansum(uncertainty_matrix))
     #rig(uncertainty_matrix)
-    #[finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix)
-    [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_rows_matrix(uncertainty_matrix,row_nrs,row_edges)
+    [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix)
+    #[finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_rows_matrix(uncertainty_matrix,row_nrs,row_edges)
+    sensoruncertainty=0
+    [spread_matrix_updated,uncertainty_matrix_updated] = updatematrix(pathogen1,plant_matrix,spread_matrix,spread_matrix,uncertainty_matrix,infopath, sensoruncertainty,True)
 
     #print("sum entropy = "+str(np.nansum(uncertainty_matrix)))
 
@@ -128,7 +131,7 @@ def print_hi(name):
         scenario=1
         print("Without uncertainty all over")
         while scenario<=7:
-            [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix,scenario)
+            [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix,scenario)
             print("Scen.= "+str(scenario)+" Cost= "+str(finalcost)+" Info= "+str(finalinfo))
             results.append("Scen.= "+str(scenario)+" Cost= "+str(finalcost)+" Info= "+str(finalinfo))
             scenario+=1
@@ -136,7 +139,7 @@ def print_hi(name):
         uncertainty_matrix[uncertainty_matrix == 0] = 0.001  # little bit of uncertainty all over the map
         print("With uncertainty all over")
         while scenario<=6:
-            [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix,scenario)
+            [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix,scenario)
             print("Scen.= "+str(scenario)+" Cost= "+str(finalcost)+" Info= "+str(finalinfo))
             results.append("Scen.= "+str(scenario)+" Cost= "+str(finalcost)+" Info= "+str(finalinfo))
             scenario+=1

@@ -69,9 +69,11 @@ class IRrtStar:
         self.reductioncount = 0 # to count the shortening of range in Near()
         self.reduction = 0
 
+        self.inforadius = 1 # monitor radius around the robot (0 = no radius, so only at the location of the robot)
+
         self.budget=200
         self.scenario=scenario
-        self.kinematic = "dubinsrev" # kinematic constraint
+        self.kinematic = "none" # kinematic constraint
         # choices: "none", "dubins", "dubinsrev", "reedsshepp", "ranger", "limit"
         #self.dubinsmatrix = np.empty((3, 100000), dtype=object)
         #self.dubinsmat = np.empty((3, 100000), dtype=object)
@@ -241,7 +243,9 @@ class IRrtStar:
                     # print("Best node after rewiring: tot. info: "+str(x_best.totalinfo)+" Cost: "+str(x_best.totalcost))
 
         #self.path = self.ExtractPath(x_best)
-        [self.path,nodes] = self.ExtractPath(x_best)
+        #[self.path,nodes] = self.ExtractPath(x_best)
+        [self.path,infopath] = self.ExtractPath(x_best)
+
         #for point in reversed(x_best.infopath):
         #    print("infopoint (x,y)=("+str(point[0])+","+str(point[1])+")")
         #print("length of infopath: "+str(len(x_best.infopath)+len(x_best.lastinfopath)))
@@ -298,15 +302,17 @@ class IRrtStar:
             divider = make_axes_locatable(ax)
             cax = divider.append_axes("right", size="5%", pad=0.05)
             plt.colorbar(im, cax=cax)
-            for node in nodes:
-                ax.plot(node[0], node[1], marker=(8, 2, 0),color="blue", linewidth=3, markersize=20)
-            ax.plot(x_best.x, x_best.y, marker=(8, 2, 0), color="green", linewidth=3, markersize=20)
+            # for node in nodes:
+            #     ax.plot(node[0], node[1], marker=(8, 2, 0),color="blue", linewidth=3, markersize=20)
+            for cell in infopath:
+                ax.plot(cell[0],cell[1],marker="o",markersize=1,color="blue")
+            #ax.plot(x_best.x, x_best.y, marker=(8, 2, 0), color="green", linewidth=3, markersize=20)
             ax.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
             ax.set_title("Spatial distribution of uncertainty and final path")
             fig.tight_layout()
             plt.show()
 
-        return self.path, x_best.totalcost, x_best.totalinfo, self.budget, self.step_len, self.search_radius, k
+        return self.path, infopath, x_best.totalcost, x_best.totalinfo, self.budget, self.step_len, self.search_radius, k
 
     def FindInfo(self, node_end_x,node_end_y,node_start_x,node_start_y,node,distance,totalpath=True):
         #node_end = the goal or new node
@@ -331,6 +337,15 @@ class IRrtStar:
                     infopath.append([xpoint, ypoint])
                     if np.isnan(self.uncertaintymatrix[ypoint, xpoint]):  # to prevent going through edges and/or obstacles
                         self.costmatrix[node_start_y * 100 + node_start_x,node_end_y * 100 + node_end_x] = np.inf
+                if self.inforadius>0:
+                    for rowdist in range(-self.inforadius,self.inforadius+1):
+                        for coldist in range(-self.inforadius,self.inforadius+1):
+                            if (coldist**2+rowdist**2)<=self.inforadius**2: #radius
+                                xpoint_=xpoint+coldist
+                                ypoint_=ypoint+rowdist
+                                if not [xpoint_, ypoint_] in infopath and not np.isnan(self.uncertaintymatrix[ypoint_, xpoint_]):
+                                    info += self.uncertaintymatrix[ypoint_, xpoint_]
+                                    infopath.append([xpoint_, ypoint_])
                 t += dt
 
 
@@ -834,17 +849,34 @@ class IRrtStar:
             print("Final info value: "+str(node.totalinfo))
         path=[]
         if not self.kinematic=="dubins" and not self.kinematic=="reedsshepp" and not self.kinematic=="dubinsrev":
+            # to visualize radius of infopath
+            curnode = node
+            currentinfopath=[]
+            while curnode.parent:
+                # print("index 1 = " + str(curnode.parent.y*100+curnode.parent.x) + " index 2 = " + str(
+                #    curnode.y*100+curnode.x))
+                currentinfopath.extend(
+                    self.infopathmatrix[curnode.parent.y * 100 + curnode.parent.x, curnode.y * 100 + curnode.x])
+                curnode = curnode.parent
+            currentinfopath.extend(self.infopathmatrix[self.x_goal.y * 100 + self.x_goal.x, node.y * 100 + node.x])
+
+            # extracting the path
             path = [[self.x_goal.x, self.x_goal.y]]
 
             while node.parent:
                 path.append([node.x, node.y])
                 node = node.parent
             path.append([node.x, node.y])  # this should be the start
+
+
+
         if (self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="dubinsrev") and node!=self.x_start:
             path = []
             totalcost = 0 # just for checking/debugging now
             [cost, angle, dubins_x, dubins_y, infopath] = self.getDubins(node, self.x_goal)
             totalcost+=cost
+            currentinfopath=[] # to visualize radius around infopath
+            currentinfopath.extend(infopath)
 
             for i in range(len(dubins_x)):
                 #path.append([dubins_x[-(i+1)],dubins_y[-(i+1)]])
@@ -871,6 +903,8 @@ class IRrtStar:
 
                 print(node.x,node.y,node_child.x,node_child.y)
                 [cost, angleparent, dubins_x, dubins_y, infopath] = self.getDubins(node, node_child,last,lastangle)
+                currentinfopath.extend(infopath)
+
                 node_child=node
                 totalcost += cost
 
@@ -892,7 +926,7 @@ class IRrtStar:
             print("Totalcost: "+str(totalcost))
 
         #return path
-        return path, nodes
+        return path, currentinfopath
 
     def InGoalRegion(self, node):
         #if self.Line(node, self.x_goal) < self.step_len:
@@ -1159,6 +1193,15 @@ class IRrtStar:
         infopath = []
         for cell in infopathrel:
             infopath.append([cell[0] + sx, cell[1] + sy])
+            if self.inforadius > 0:
+                for rowdist in range(-self.inforadius, self.inforadius+1):
+                    for coldist in range(-self.inforadius, self.inforadius+1):
+                        if (coldist ** 2 + rowdist ** 2) <= self.inforadius ** 2:  # radius
+                            xpoint_ = cell[0] + sx + coldist
+                            ypoint_ = cell[1] + sy + rowdist
+                            if not [xpoint_, ypoint_] in infopath and not np.isnan(self.uncertaintymatrix[ypoint_, xpoint_]):
+                                #info += self.uncertaintymatrix[ypoint_, xpoint_]
+                                infopath.append([xpoint_, ypoint_])
         return cost,angle,dubins_x,dubins_y,infopath
 
     @staticmethod
@@ -1294,9 +1337,9 @@ def main(uncertaintymatrix,scenario=3):
     x_goal = (50,50)
 
     rrt_star = IRrtStar(x_start, x_goal, 15, 0.0, 15, 2000,uncertaintymatrix,scenario)
-    [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration]=rrt_star.planning()
+    [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration]=rrt_star.planning()
 
-    return finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration
+    return finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration
 
 
 if __name__ == '__main__':

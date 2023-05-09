@@ -1,5 +1,6 @@
 class Pathogen():
     def __init__(self,patchnr,infectionduration,spreadrange,reproductionfraction,reproductionrate,standarddeviation, saturation):
+        self.type = "pathogen"
         self.patchnr = patchnr
         self.infectionduration = infectionduration
         self.spreadrange = spreadrange

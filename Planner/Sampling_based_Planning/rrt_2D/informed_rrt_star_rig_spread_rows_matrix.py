@@ -85,6 +85,7 @@ class IRrtStar:
         self.reduction = 0
 
         self.budget=250
+        self.inforadius=1
         self.scenario = 1
         self.kinematic = "none"  # kinematic constraint
         # choices: "none", "dubins", "dubinsrev", "reedsshepp", "ranger", "limit"
@@ -177,9 +178,9 @@ class IRrtStar:
                 else:
                     count_down=10 #reset
                     print("Reset countdown")
-            if k==101: # to test up to certain iteration
+            if k==51: # to test up to certain iteration
                 count_down=0
-            if count_down<=0 and k>100:
+            if count_down<=0 and k>50:
                 print("Reached stopping criterion at iteration "+str(k))
                 break # we stop iterating if the best score is not improving much anymore and we already passed at least ... cycles
 
@@ -256,7 +257,9 @@ class IRrtStar:
                     # self.x_best = max(info, key=info.get)
                     # print("Best node after rewiring: tot. info: "+str(x_best.totalinfo)+" Cost: "+str(x_best.totalcost))
 
-        self.path = self.ExtractPath(x_best)
+        #self.path = self.ExtractPath(x_best)
+        [self.path,infopathradius] = self.ExtractPath(x_best)
+
         node = x_best
         infopathlength=len(self.infopathmatrix[node.y*100+node.x,self.x_goal.y*100+self.x_goal.x])
         finalpath= self.infopathmatrix[node.y*100+node.x,self.x_goal.y*100+self.x_goal.x]
@@ -317,7 +320,10 @@ class IRrtStar:
             cax = divider.append_axes("right", size="5%", pad=0.05)
             plt.colorbar(im, cax=cax)
             #ax.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
+            for cell in infopathradius:
+                ax.plot(cell[0],cell[1],marker="o",markersize=1,color="blue")
             ax.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
+
 
             #ax.plot([x for x, _ in x_best.infopath], [y for _, y in x_best.infopath], '-r')
             #ax.plot([x for x, _ in x_best.lastinfopath], [y for _, y in x_best.lastinfopath], '-r')
@@ -326,7 +332,7 @@ class IRrtStar:
             plt.show()
             #plt.close()
 
-        return self.path, x_best.totalcost, x_best.totalinfo, self.budget, self.step_len, self.search_radius, k
+        return self.path, infopathradius, x_best.totalcost, x_best.totalinfo, self.budget, self.step_len, self.search_radius, k
 
     def FindInfo(self, node_end_x, node_end_y, node_start_x, node_start_y, currentinfopath, distance, totalpath=True):
         # node_end = the goal or new node
@@ -664,15 +670,23 @@ class IRrtStar:
             # plt.show()
 
             #if not costOnly:
-            for infopoint in infopath:
+            infopathcopy=deepcopy(infopath)
+            for infopoint in infopathcopy:
                 if np.isnan(self.uncertaintymatrix[infopoint[1], infopoint[0]]):
                     cost=np.inf
                     break;
                 info += self.uncertaintymatrix[infopoint[1], infopoint[0]]
+                if self.inforadius>0:
+                    xpoint_ = infopoint[0]
+                    for rowdist in range(-self.inforadius,self.inforadius+1):
+                        ypoint_=infopoint[1]+rowdist
+                        if not [xpoint_, ypoint_] in infopath and not np.isnan(self.uncertaintymatrix[ypoint_, xpoint_]):
+                            info += self.uncertaintymatrix[ypoint_, xpoint_]
+                            infopath.append([xpoint_, ypoint_])
 
-                self.infomatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = info
-                self.infomatrix[
-                    node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = info  # mirror the matrix
+            self.infomatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = info
+            self.infomatrix[
+                node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = info  # mirror the matrix
 
             self.costmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = cost
             self.costmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = cost #mirror the matrix
@@ -1494,17 +1508,44 @@ class IRrtStar:
     def ExtractPath(self, node):
         print("Final cost: "+str(node.totalcost)+" Cost without final part: "+str(node.cost))
         print("Final info value: "+str(node.totalinfo))
-        #path = [[self.x_goal.x, self.x_goal.y]]
-        path= []
-        path.extend((self.infopathmatrix[node.y*100+node.x, self.x_goal.y*100+self.x_goal.x])[::-1])
+        # to visualize radius of infopath
+        curnode = node
+        currentinfopath = []
+        currentinfopath.extend((self.infopathmatrix[self.x_goal.y * 100 + self.x_goal.x, node.y * 100 + node.x])[::-1])
+
+        while curnode.parent:
+            # print("index 1 = " + str(curnode.parent.y*100+curnode.parent.x) + " index 2 = " + str(
+            #    curnode.y*100+curnode.x))
+            currentinfopath.extend((
+                self.infopathmatrix[curnode.parent.y * 100 + curnode.parent.x, curnode.y * 100 + curnode.x])[::-1])
+            curnode = curnode.parent
+
+        path=[]
+        start  = [node.x,node.y]
+        end= [self.x_goal.x,self.x_goal.y]
+        [infopath, cost] = self.search(self.maze, self.edgemaze, start, end)
+        path.extend(infopath[::-1])
         while node.parent:
-            #path.append([node.x, node.y])
-            path.extend((self.infopathmatrix[node.parent.y*100+node.parent.x, node.y*100+node.x])[::-1])
-            node = node.parent
+            start = [node.parent.x, node.parent.y]
+            end = [node.x, node.y]
+            # end = [node_start_x+20,node_start_y]
+            # print(start +end)
+
+            [infopath, cost] = self.search(self.maze, self.edgemaze, start, end)
+            path.extend(infopath[::-1])
+            node=node.parent
+        # to extract the path
+        # path= []
+        # path.extend((self.infopathmatrix[node.y*100+node.x, self.x_goal.y*100+self.x_goal.x])[::-1])
+        # while node.parent:
+        #     #path.append([node.x, node.y])
+        #     path.extend((self.infopathmatrix[node.parent.y*100+node.parent.x, node.y*100+node.x])[::-1])
+        #     node = node.parent
 
         #path.append([self.x_start.x, self.x_start.y])
-        print(path)
-        return path
+        #print(path)
+        #return path
+        return path,currentinfopath
 
     def InGoalRegion(self, node):
         #if self.Line(node, self.x_goal) < self.step_len:
@@ -1745,9 +1786,9 @@ def main(uncertaintymatrix,row_nrs,row_edges):
     x_goal = (50,48)
 
     rrt_star = IRrtStar(x_start, x_goal, 15, 0.0, 15, 2000,uncertaintymatrix,row_nrs,row_edges)
-    [finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration]=rrt_star.planning()
+    [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration]=rrt_star.planning()
 
-    return finalpath, finalcost, finalinfo, budget, steplength, searchradius, iteration
+    return finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration
 
 
 if __name__ == '__main__':

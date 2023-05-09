@@ -6,6 +6,11 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from datetime import datetime
 import os
+from copy import deepcopy
+from spreading import pathogenupdate
+from spreading import weedsupdate
+
+
 def showpath(uncertaintymatrix, path, cost, info,budget, steplength, searchradius, iteration,show,save):
     fig, ax = plt.subplots()
     colormap = cm.Blues
@@ -34,3 +39,73 @@ def showpath(uncertaintymatrix, path, cost, info,budget, steplength, searchradiu
         plt.savefig(path+filename)
     if show:
         plt.show()
+
+def updatematrix(disease,plantmatrix,spreadmatrix,worldmodel,uncertaintymatrix,infopath, sensoruncertainty=0, show=False):
+    # disease = pathogen or weed
+    saturation=disease.saturation
+    # spreadmatrix = reality (ground truth on the spread of the pathogens/weeds) (= just for simulation purposes)
+    # worldmodel = spreadmatrix that we know of
+    # sensoruncertainty = uncertainty in monitoring, value between 0 (= no uncertainty) and 1 (monitoring gives no info at all)
+    #   this uncertainty represents the standard deviation (STD) relative to the actual value
+    dailyuncertainty=0.001 # how much the uncertainty rises (across the entire matrix) each day
+
+    uncertaintymatrixnew = deepcopy(uncertaintymatrix)
+    worldmodelnew= deepcopy(worldmodel)
+    for cell in infopath:
+        worldmodelnew[cell[1],cell[0]]=np.random.normal(spreadmatrix[cell[1],cell[0]], spreadmatrix[cell[1],cell[0]]*sensoruncertainty) # updating the worldmodel with the monitored data
+
+    if disease.type=="pathogen":
+        [worldmodelnew,uncertaintymatrixupdate]=pathogenupdate(disease,plantmatrix,worldmodelnew)
+    else:
+        [worldmodelnew,uncertaintymatrixupdate]=weedsupdate(disease,plantmatrix,worldmodelnew)
+
+    for row in range(100):
+        for col in range(100):
+            if not uncertaintymatrixupdate[row,col]==0:
+                uncertaintymatrixnew[row,col]=uncertaintymatrixupdate[row,col] # we only take over those that have a value
+    for cell in infopath:
+        uncertaintymatrixnew[cell[1],cell[0]]=sensoruncertainty*uncertaintymatrix[cell[1],cell[0]] # decrease the uncertainty at the monitored cells
+
+    uncertaintymatrixnew+=(np.ones_like(uncertaintymatrixnew)*dailyuncertainty) # add the daily uncertainty to each cell
+
+    if show:
+        fig, ax = plt.subplots(2,2)
+        colormap = cm.Oranges
+        colormap.set_bad(color='black')
+        im1 = ax[0,0].imshow(worldmodel, colormap, vmin=0, vmax=saturation, origin='lower')
+        divider = make_axes_locatable(ax[0,0])
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+
+        plt.colorbar(im1, cax=cax)
+        ax[0,0].set_title("World model")
+
+        colormap = cm.Oranges
+        colormap.set_bad(color='black')
+        im2 = ax[0,1].imshow(worldmodelnew, colormap, vmin=0, vmax=saturation, origin='lower')
+        divider = make_axes_locatable(ax[0,1])
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+
+        plt.colorbar(im2, cax=cax)
+        ax[0,1].set_title("World model - new")
+
+
+        colormap = cm.Blues
+        colormap.set_bad(color='black')
+        im3 = ax[1,0].imshow(uncertaintymatrix, colormap, vmin=0, vmax=1, origin='lower')
+        divider = make_axes_locatable(ax[1,0])
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+
+        plt.colorbar(im3, cax=cax)
+        ax[1,0].set_title("Spatial distribution of uncertainty")
+
+        colormap = cm.Blues
+        colormap.set_bad(color='black')
+        im4 = ax[1,1].imshow(uncertaintymatrixnew, colormap, vmin=0, vmax=1, origin='lower')
+        divider = make_axes_locatable(ax[1,1])
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+
+        plt.colorbar(im4, cax=cax)
+        ax[1,1].set_title("Spatial distribution of uncertainty - new")
+        fig.tight_layout()
+        plt.show()
+    return worldmodelnew,uncertaintymatrixnew

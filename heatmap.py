@@ -13,7 +13,7 @@ def show_map(matrix):
     colormap.set_bad(color='black')
     im = ax.imshow(matrix,cmap=colormap, vmin=0, vmax=1, origin='lower')
 
-    ax.set_title("Spatial distribution of crops")
+    ax.set_title("Heatmap visualization")
     fig.tight_layout()
     plt.show()
 
