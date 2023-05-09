@@ -87,7 +87,7 @@ class IRrtStar:
         self.budget=250
         self.inforadius=1
         self.scenario = 1
-        self.kinematic = "none"  # kinematic constraint
+        self.kinematic = "reedsshepprev"  # kinematic constraint
         # choices: "none", "dubins", "dubinsrev", "reedsshepp", "ranger", "limit"
 
         self.uncertaintymatrix = uncertaintymatrix
@@ -386,7 +386,7 @@ class IRrtStar:
             for gridpoint in infopath:
                 self.maze[gridpoint[1],gridpoint[0]]=0
                 self.edgemaze[gridpoint[1],gridpoint[0]]=0
-                width_path=1
+                width_path=0
                 for i in range(width_path):
                     self.maze[gridpoint[1], gridpoint[0]+(i+1)] = 0
                     self.edgemaze[gridpoint[1], gridpoint[0]+(i+1)] = 0
@@ -408,7 +408,7 @@ class IRrtStar:
                 self.maze[gridpoint[1],gridpoint[0]]=0
                 self.edgemaze[gridpoint[1],gridpoint[0]]=0
 
-                width_path=1
+                width_path=0
                 for i in range(width_path):
                     self.maze[gridpoint[1], gridpoint[0]-(i+1)] = 0
                     self.edgemaze[gridpoint[1], gridpoint[0]-(i+1)] = 0
@@ -565,12 +565,51 @@ class IRrtStar:
             # Generate children from all adjacent squares
             children = []
 
+
+            # move options dubins/ reedsshepp:
+            if self.kinematic=="dubins" or self.kinematic=="reedsshepp":
+                cur_index = self.row_nrs.index(current_node.position[1])
+                boolright=0
+                if self.row_edges[cur_index][1]==current_node.position[0]:
+                    boolright=1
+
+                for index in range(len(self.row_nrs) - 1): # all rows on same side
+                    move.append([self.row_edges[index][boolright],self.row_nrs[index]])
+                move.append([self.row_edges[cur_index][abs(boolright-1)],self.row_nrs[cur_index]])
+            # move options reedsshepp reverse:
+            elif self.kinematic == "reedsshepprev":
+                move=[]
+                cur_index = self.row_nrs.index(current_node.position[1])
+                booledge=False
+                if self.row_edges[cur_index][1] == current_node.position[0]:
+                    boolright = 1
+                    booledge = True
+                elif self.row_edges[cur_index][0] == current_node.position[0]:
+                    boolright=0
+                    booledge = True
+                if booledge:
+                    for index in range(len(self.row_nrs) - 1):  # all edges on same side
+                        move.append([self.row_edges[index][boolright], self.row_nrs[index]])
+                    move.append([self.row_edges[cur_index][abs(boolright - 1)], self.row_nrs[cur_index]]) # edge on other side of current row
+                if not booledge:
+                    move.append([self.row_edges[cur_index][0], self.row_nrs[cur_index]]) # edge on either side of current row
+                    move.append([self.row_edges[cur_index][1], self.row_nrs[cur_index]])  # edge on either side of current row
+                for xpos in range(self.row_edges[cur_index][0],self.row_edges[cur_index][1]):
+                    move.append([xpos,self.row_nrs[cur_index]])
+
             for new_position in move:
-                cost = new_position[2]
+                #cost = new_position[2]
+                # just for now #TODO: change later!
+                #cost =abs(current_node.position[0]-new_position[0])
+                cost = 1
+                node_position = (new_position[0],new_position[1])
+
+                #dubins/reedsshepp/reedsshepprev:
+                #cost = getDubins...
 
 
                 # Get node position
-                node_position = (current_node.position[0] + new_position[0], current_node.position[1] + new_position[1])
+                #node_position = (current_node.position[0] + new_position[0], current_node.position[1] + new_position[1])
 
                 # Make sure within range (check if within maze boundary)
                 if (node_position[0] > (no_rows - 1) or
@@ -582,8 +621,9 @@ class IRrtStar:
                 # Make sure walkable terrain
                 # note: if .. continue means: if the statement returns true, we skip the rest of the loop
                 # two conditions: if the position is not within the rows/edges or if the position is changing in y position while it's not on "edge" terrain
-                if maze[node_position[1]][node_position[0]] != 0 or (new_position[1]!=0 and (edgemaze[node_position[1]][node_position[0]]!=0 or edgemaze[current_node.position[1]][current_node.position[0]]!=0)): #or (node_position[0]==end[0] and node_position[1]==end[1])
-                    continue
+                # TODO: add condition (if... continue) back later
+                # if maze[node_position[1]][node_position[0]] != 0 or (new_position[1]!=0 and (edgemaze[node_position[1]][node_position[0]]!=0 or edgemaze[current_node.position[1]][current_node.position[0]]!=0)): #or (node_position[0]==end[0] and node_position[1]==end[1])
+                #     continue
 
                 # Create new node
                 new_node = NodeA(current_node, node_position)
@@ -1785,7 +1825,7 @@ def main(uncertaintymatrix,row_nrs,row_edges):
     #x_goal = (37, 18)  # Goal node
     x_goal = (50,48)
 
-    rrt_star = IRrtStar(x_start, x_goal, 15, 0.0, 15, 2000,uncertaintymatrix,row_nrs,row_edges)
+    rrt_star = IRrtStar(x_start, x_goal, 80, 0.0, 15, 2000,uncertaintymatrix,row_nrs,row_edges)
     [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration]=rrt_star.planning()
 
     return finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration

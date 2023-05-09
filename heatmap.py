@@ -46,11 +46,18 @@ def withrows(matrix,plantdist,rowdist,show=True):
     #print(row_edges)
     if show:
         fig, ax = plt.subplots()
+        spacing =1  # This can be your user specified spacing.
+        minorLocator = mpl.ticker.IndexLocator(spacing,0)
+        # Set minor tick locations.
+        ax.yaxis.set_minor_locator(minorLocator)
+        ax.xaxis.set_minor_locator(minorLocator)
+        #ax.grid(color='w', linestyle='-', linewidth=0.5, which="minor")
         colormap = cm.Greens
-        colormap.set_bad(color='black')
+        colormap.set_bad(color='black',alpha=1)
         im = ax.imshow(heatmatrix, colormap, vmin=0, vmax=1, origin='lower')
         ax.set_title("Spatial distribution of crops (with rows)")
         fig.tight_layout()
+        ax.tick_params(which='minor', bottom=False, left=False)
         plt.show()
 
         fig, ax = plt.subplots()
