@@ -92,9 +92,9 @@ def print_hi(name):
 
     pathogen1 = Pathogen(patchnr=2,infectionduration=4,spreadrange=3, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.3, saturation=5)
     #pathogen1 = Pathogen(patchnr=1,infectionduration=6,spreadrange=6, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.1, saturation=3) # one big patch
-    spread_matrix, uncertainty_matrix = pathogenspread(field_matrix,plant_matrix,pathogen1, True)
+    spread_matrix, worldmodel_matrix, uncertainty_matrix = pathogenspread(field_matrix,plant_matrix,pathogen1, True)
     #weed1 = Weed(patchnr=4,patchsize=7,spreadrange=3,reproductionrate=2,standarddeviation=1, saturation=1,plantattach=False)
-    #spread_matrix,uncertainty_matrix = weedsspread(field_matrix,plant_matrix,weed1, True)
+    #spread_matrix,worldmodel_matrix, uncertainty_matrix = weedsspread(field_matrix,plant_matrix,weed1, True)
     #del plant_matrix
     #del spread_matrix #to save memory
     #np.save('uncertainty_matrixfile.npy',uncertainty_matrix)
@@ -115,7 +115,7 @@ def print_hi(name):
     [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix)
     #[finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_rows_matrix(uncertainty_matrix,row_nrs,row_edges)
     sensoruncertainty=0
-    [spread_matrix_updated,uncertainty_matrix_updated] = updatematrix(pathogen1,plant_matrix,spread_matrix,spread_matrix,uncertainty_matrix,infopath, sensoruncertainty,True)
+    [spread_matrix_updated,worldmodel_updated,uncertainty_matrix_updated] = updatematrix(pathogen1,plant_matrix,spread_matrix,worldmodel_matrix,uncertainty_matrix,infopath, sensoruncertainty,True)
 
     #print("sum entropy = "+str(np.nansum(uncertainty_matrix)))
 

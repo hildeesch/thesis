@@ -55,9 +55,9 @@ def updatematrix(disease,plantmatrix,spreadmatrix,worldmodel,uncertaintymatrix,i
         worldmodelnew[cell[1],cell[0]]=np.random.normal(spreadmatrix[cell[1],cell[0]], spreadmatrix[cell[1],cell[0]]*sensoruncertainty) # updating the worldmodel with the monitored data
 
     if disease.type=="pathogen":
-        [worldmodelnew,uncertaintymatrixupdate]=pathogenupdate(disease,plantmatrix,worldmodelnew)
+        [spreadnew,worldmodelnew,uncertaintymatrixupdate]=pathogenupdate(disease,plantmatrix,spreadmatrix,worldmodelnew)
     else:
-        [worldmodelnew,uncertaintymatrixupdate]=weedsupdate(disease,plantmatrix,worldmodelnew)
+        [spreadnew,worldmodelnew,uncertaintymatrixupdate]=weedsupdate(disease,plantmatrix,spreadmatrix,worldmodelnew)
 
     for row in range(100):
         for col in range(100):
@@ -67,45 +67,80 @@ def updatematrix(disease,plantmatrix,spreadmatrix,worldmodel,uncertaintymatrix,i
         uncertaintymatrixnew[cell[1],cell[0]]=sensoruncertainty*uncertaintymatrix[cell[1],cell[0]] # decrease the uncertainty at the monitored cells
 
     uncertaintymatrixnew+=(np.ones_like(uncertaintymatrixnew)*dailyuncertainty) # add the daily uncertainty to each cell
-
+    findDifferenceModel(spreadnew,worldmodelnew,True)
     if show:
-        fig, ax = plt.subplots(2,2)
+        fig, ax = plt.subplots(3,2)
         colormap = cm.Oranges
         colormap.set_bad(color='black')
-        im1 = ax[0,0].imshow(worldmodel, colormap, vmin=0, vmax=saturation, origin='lower')
+        im5 = ax[0,0].imshow(spreadmatrix, colormap, vmin=0, vmax=saturation, origin='lower')
         divider = make_axes_locatable(ax[0,0])
         cax = divider.append_axes("right", size="5%", pad=0.05)
 
-        plt.colorbar(im1, cax=cax)
-        ax[0,0].set_title("World model")
+        plt.colorbar(im5, cax=cax)
+        ax[0,0].set_title("Spread model")
 
         colormap = cm.Oranges
         colormap.set_bad(color='black')
-        im2 = ax[0,1].imshow(worldmodelnew, colormap, vmin=0, vmax=saturation, origin='lower')
+        im6 = ax[0,1].imshow(spreadnew, colormap, vmin=0, vmax=saturation, origin='lower')
         divider = make_axes_locatable(ax[0,1])
         cax = divider.append_axes("right", size="5%", pad=0.05)
 
+        plt.colorbar(im6, cax=cax)
+        ax[0,1].set_title("Spread model - new")
+
+
+        colormap = cm.Oranges
+        colormap.set_bad(color='black')
+        im1 = ax[1,0].imshow(worldmodel, colormap, vmin=0, vmax=saturation, origin='lower')
+        divider = make_axes_locatable(ax[1,0])
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+
+        plt.colorbar(im1, cax=cax)
+        ax[1,0].set_title("World model")
+
+        colormap = cm.Oranges
+        colormap.set_bad(color='black')
+        im2 = ax[1,1].imshow(worldmodelnew, colormap, vmin=0, vmax=saturation, origin='lower')
+        divider = make_axes_locatable(ax[1,1])
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+
         plt.colorbar(im2, cax=cax)
-        ax[0,1].set_title("World model - new")
+        ax[1,1].set_title("World model - new")
 
 
         colormap = cm.Blues
         colormap.set_bad(color='black')
-        im3 = ax[1,0].imshow(uncertaintymatrix, colormap, vmin=0, vmax=1, origin='lower')
+        im3 = ax[2,0].imshow(uncertaintymatrix, colormap, vmin=0, vmax=1, origin='lower')
         divider = make_axes_locatable(ax[1,0])
         cax = divider.append_axes("right", size="5%", pad=0.05)
 
         plt.colorbar(im3, cax=cax)
-        ax[1,0].set_title("Spatial distribution of uncertainty")
+        ax[2,0].set_title("Spatial distribution of uncertainty")
 
         colormap = cm.Blues
         colormap.set_bad(color='black')
-        im4 = ax[1,1].imshow(uncertaintymatrixnew, colormap, vmin=0, vmax=1, origin='lower')
-        divider = make_axes_locatable(ax[1,1])
+        im4 = ax[2,1].imshow(uncertaintymatrixnew, colormap, vmin=0, vmax=1, origin='lower')
+        divider = make_axes_locatable(ax[2,1])
         cax = divider.append_axes("right", size="5%", pad=0.05)
 
         plt.colorbar(im4, cax=cax)
-        ax[1,1].set_title("Spatial distribution of uncertainty - new")
+        ax[2,1].set_title("Spatial distribution of uncertainty - new")
         fig.tight_layout()
         plt.show()
-    return worldmodelnew,uncertaintymatrixnew
+    return spreadnew, worldmodelnew, uncertaintymatrixnew
+
+def findDifferenceModel(model1,model2,show=False):
+    differencematrix = np.zeros((100,100))
+    for row in range(100):
+        for col in range(100):
+            differencematrix[row,col]=abs(model1[row,col]-model2[row,col])
+    if show:
+        fig, ax = plt.subplots()
+        colormap = cm.Oranges
+        colormap.set_bad(color='black')
+        im5 = ax.imshow(differencematrix, colormap, vmin=0, vmax=1, origin='lower')
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+
+        plt.colorbar(im5, cax=cax)
+        ax.set_title("Difference in models")
