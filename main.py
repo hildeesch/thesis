@@ -84,8 +84,8 @@ def print_hi(name):
 
 
     time_start = time.time()
-    field_matrix = polygon("hexagon",False)
-    [plant_matrix,row_nrs,row_edges] = withrows(field_matrix,2,1,True)
+    [field_matrix,field_vertex] = polygon("hexagon",False)
+    [plant_matrix,row_nrs,row_edges,field_vertex] = withrows(field_matrix,2,1,field_vertex,False)
     #plant_matrix = norows(field_matrix,2,False)
     #show_map(matrix_nonconvex)
     #heat_matrix = withrows(matrix_square,2,4,True)
@@ -113,7 +113,7 @@ def print_hi(name):
     print(np.nansum(uncertainty_matrix))
     #rig(uncertainty_matrix)
     #[finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix)
-    [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_rows_matrix(uncertainty_matrix,row_nrs,row_edges)
+    [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_rows_matrix(uncertainty_matrix,row_nrs,row_edges,field_vertex)
     sensoruncertainty=0
     [spread_matrix_updated,worldmodel_updated,uncertainty_matrix_updated] = updatematrix(pathogen1,plant_matrix,spread_matrix,worldmodel_matrix,uncertainty_matrix,infopath, sensoruncertainty,True)
 

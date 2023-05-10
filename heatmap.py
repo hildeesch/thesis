@@ -18,12 +18,12 @@ def show_map(matrix):
     plt.show()
 
 # plantdist: 1 = plant in every row/column, 2= one distance between them, etc.
-def withrows(matrix,plantdist,rowdist,show=True):
+def withrows(matrix,plantdist,rowdist,field_vertex,show=True):
     heatmatrix=deepcopy(matrix)
     heatmatrix[heatmatrix==0.5]=0
     edgematrix=deepcopy(heatmatrix)
-    row_nrs = [] # to keep track of where the rows are
-    row_edges = [] # to keep track of the left and right edges of each row
+    row_nrs = [] # to keep track of where the rows are (y-coordinates)
+    row_edges = [] # to keep track of the left and right edges of each row (x-coordinates)
     for rows in range(0,100,rowdist):
         for columns in range(0,100,plantdist):
             if matrix[rows, columns] == 0.0:
@@ -43,6 +43,33 @@ def withrows(matrix,plantdist,rowdist,show=True):
         edgematrix[rows,right]=0.5
         row_edges.append([left,right])
     print(row_nrs)
+    print(field_vertex)
+    field_vertex_new=[]
+    for vertex in field_vertex:
+        temp_vertex=[vertex[0],vertex[1]]
+        for index,row in enumerate(row_nrs):
+            if vertex[1]<row: # so going from bottom up, passing the vertex
+                if index==0: # all the way at the bottom
+                    temp_vertex.append([-1,index])
+                else:
+                    temp_vertex.append([index-1,index]) # vertex lies between these indexes
+                boolright=0
+                if (row_edges[index][1]-vertex[0])**2<(row_edges[index][0]-vertex[0])**2: # right closer than left
+                    boolright=1
+                temp_vertex.append(boolright)
+                field_vertex_new.append(temp_vertex)
+                break;
+        if not len(temp_vertex)>2: # completely at the top
+            temp_vertex.append([index,index+1])
+            boolright = 0
+            if (row_edges[index][1] - vertex[0]) ** 2 < (
+                    row_edges[index][0] - vertex[0]) ** 2:  # right closer than left
+                boolright = 1
+            temp_vertex.append(boolright)
+            field_vertex_new.append(temp_vertex)
+    print(field_vertex_new)
+
+
     #print(row_edges)
     if show:
         fig, ax = plt.subplots()
@@ -68,7 +95,7 @@ def withrows(matrix,plantdist,rowdist,show=True):
         fig.tight_layout()
         plt.show()
 
-    return heatmatrix, row_nrs,row_edges
+    return heatmatrix, row_nrs,row_edges, field_vertex_new
 
 def norows(matrix,density,show=True):
     heatmatrix=deepcopy(matrix)
@@ -112,7 +139,7 @@ def polygon(shape,show=True):
         # p6 = (79,0)
 
         # convex small
-        p1 = (40, 30)
+        p1 = (40, 30) #(x,y)
         p2 = (20,50)
         p3 = (40,79)
         p4 = (69, 70)
@@ -151,4 +178,4 @@ def polygon(shape,show=True):
 
     if show:
         show_map(matrix)
-    return matrix
+    return matrix, coords
