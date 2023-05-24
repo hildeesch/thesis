@@ -30,15 +30,29 @@ def withrows(matrix,plantdist,rowdist,field_vertex,show=True):
                 heatmatrix[rows,columns]=1.0
                 if rows not in row_nrs:
                     row_nrs.append(rows)
-    for index, rows in enumerate(row_nrs):
+    path_width=2
+    for rows in row_nrs:
         left=None
+        right=None
         for columns in range(0,100):
-            if matrix[rows,columns]==0.5:
+            #if matrix[rows,columns]==0.5:
+            if not (np.isnan(matrix[rows,columns]) and np.isnan(matrix[rows,columns-1])) and not (not np.isnan(matrix[rows,columns]) and not np.isnan(matrix[rows,columns-1])):
                 if left ==None:
                     left=columns
-                else:
-                    right=columns
-                    #break;
+                    # change the plant matrix to incorporate the width around the edges of rows to drive in (remove plants)
+                    for i in range(path_width+1):
+                        if left-(i+1)>=0:
+                            heatmatrix[rows,left+(i)]=0
+                            #edgematrix[rows,left-(i)]=0
+
+                elif right==None:
+                    #right=columns
+                    right=columns-1
+                    for i in range(path_width+1):
+                        if right+(i+1)<100:
+                            heatmatrix[rows,right-(i)]=0
+                            #edgematrix[rows,right+(i)]=0
+
         edgematrix[rows,left]=0.5
         edgematrix[rows,right]=0.5
         row_edges.append([left,right])
@@ -172,8 +186,10 @@ def polygon(shape,show=True):
             newpoint=Point(column,row)
             if not newpoint.within(poly):
                 matrix[row,column] = np.nan
-            if newpoint.buffer(1).intersects(poly) and not newpoint.within(poly):
-                matrix[row,column] = 0.5
+    #         if newpoint.buffer(1).intersects(poly) and not newpoint.within(poly):
+    #             matrix[row,column] = 0.5
+
+    # obstacle:
     #matrix[30:40,45:60] = np.nan
 
     if show:

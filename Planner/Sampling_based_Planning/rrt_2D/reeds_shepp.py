@@ -43,8 +43,8 @@ def calc_optimal_path(sx, sy, syaw, gx, gy, gyaw, maxc, step_size=STEP_SIZE):
     tempx = paths[mini].x
     tempy = paths[mini].y
     for j in range((len(tempx))):
-        if [math.floor(tempx[j]), math.floor(tempy[j])] not in infopath:
-            infopath.append([math.floor(tempx[j]), math.floor(tempy[j])])
+        if [round(tempx[j]), round(tempy[j])] not in infopath:
+            infopath.append([round(tempx[j]), round(tempy[j])])
     return paths[mini], infopath
 
 

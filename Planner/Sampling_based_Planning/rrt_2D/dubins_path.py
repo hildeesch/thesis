@@ -314,8 +314,8 @@ def calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, curv, dubinsmatrix, step_size=0
         tempx = converted_xy[:, 0]
         tempy =converted_xy[:, 1]
         for j in range((len(tempx))):
-            if [math.floor(tempx[j]), math.floor(tempy[j])] not in infopath:
-                infopath.append([math.floor(tempx[j]), math.floor(tempy[j])])
+            if [round(tempx[j]), round(tempy[j])] not in infopath:
+                infopath.append([round(tempx[j]), round(tempy[j])])
         #dubinsmatrix[2,index] = infopath #old
 
     # old:

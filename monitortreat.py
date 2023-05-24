@@ -39,7 +39,44 @@ def showpath(uncertaintymatrix, path, cost, info,budget, steplength, searchradiu
         plt.savefig(path+filename)
     if show:
         plt.show()
+def showpathlong(day,total_days,fig,ax,uncertaintymatrix, path, cost, info,budget, steplength, searchradius, iteration,show,save):
+    if day == 1:
+        i_max = round(np.ceil(total_days/2))
+        j_max = 2
+        fig, ax = plt.subplots(i_max,j_max)
+        #fig.subplots_adjust(wspace=0.075)
+    # ax index
+    i = (day-1)//2
+    j = (day-1)%2
+    # figure
+    colormap = cm.Blues
+    colormap.set_bad(color='black')
+    im = ax[i,j].imshow(uncertaintymatrix, colormap, vmin=0, vmax=1, origin='lower')
+    divider = make_axes_locatable(ax[i,j])
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    plt.colorbar(im, cax=cax)
+    # ax.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
+    ax[i,j].plot([x for x, _ in path], [y for _, y in path], '-r')
 
+    # ax.plot([x for x, _ in x_best.infopath], [y for _, y in x_best.infopath], '-r')
+    # ax.plot([x for x, _ in x_best.lastinfopath], [y for _, y in x_best.lastinfopath], '-r')
+    ax[i,j].set_title("Path on day "+str(day)+"\nCost: "+str(round(cost))+" Info: "+str(round(info))+" \nSum entropy: "+str(round(np.nansum(uncertaintymatrix))),fontsize=10)
+    #plt.title("Final path in entropy heatmap")
+    #plt.suptitle("Cost: "+str(cost)+" Info: "+str(info)+" Sum entropy: "+str(np.nansum(uncertaintymatrix)))
+    if day==total_days:
+        fig.text(0.25,0.01,"Budget ="+str(budget)+" Step length ="+str(steplength)+" Search radius = "+str(searchradius))
+        fig.tight_layout()
+        if save:
+            now = datetime.now()
+            now_string = now.strftime("%m_%d_%H_%M")
+            path = "../../Documents/Thesis_project/Figures/New_sim_figures/"
+            dirname = os.path.dirname(path)
+            filename= "/Final_path_"+now_string+".png"
+            #plt.savefig(os.path.join(dirname,filename))
+            plt.savefig(path+filename)
+        if show:
+            plt.show()
+    return fig,ax
 def updatematrix(disease,plantmatrix,spreadmatrix,worldmodel,uncertaintymatrix,infopath, sensoruncertainty=0, show=False):
     # disease = pathogen or weed
     saturation=disease.saturation
@@ -47,7 +84,7 @@ def updatematrix(disease,plantmatrix,spreadmatrix,worldmodel,uncertaintymatrix,i
     # worldmodel = spreadmatrix that we know of
     # sensoruncertainty = uncertainty in monitoring, value between 0 (= no uncertainty) and 1 (monitoring gives no info at all)
     #   this uncertainty represents the standard deviation (STD) relative to the actual value
-    dailyuncertainty=0.001 # how much the uncertainty rises (across the entire matrix) each day
+    dailyuncertainty=0.00 # how much the uncertainty rises (across the entire matrix) each day
 
     uncertaintymatrixnew = deepcopy(uncertaintymatrix)
     worldmodelnew= deepcopy(worldmodel)
@@ -67,7 +104,7 @@ def updatematrix(disease,plantmatrix,spreadmatrix,worldmodel,uncertaintymatrix,i
         uncertaintymatrixnew[cell[1],cell[0]]=sensoruncertainty*uncertaintymatrix[cell[1],cell[0]] # decrease the uncertainty at the monitored cells
 
     uncertaintymatrixnew+=(np.ones_like(uncertaintymatrixnew)*dailyuncertainty) # add the daily uncertainty to each cell
-    findDifferenceModel(spreadnew,worldmodelnew,True)
+    findDifferenceModel(spreadnew,worldmodelnew,False)
     if show:
         fig, ax = plt.subplots(3,2)
         colormap = cm.Oranges
