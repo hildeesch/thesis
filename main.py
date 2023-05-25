@@ -34,9 +34,9 @@ def print_hi(name):
     # Choose the field shape:
     [field_matrix,field_vertex] = polygon("hexagon",False)
 
-    rowsbool = True #if you want without rows, set to False:
+    rowsbool = False #if you want without rows, set to False:
     if rowsbool:
-        [plant_matrix,row_nrs,row_edges,field_vertex] = withrows(field_matrix,2,1,field_vertex,False)
+        [plant_matrix,row_nrs,row_edges,field_vertex] = withrows(field_matrix,2,2,field_vertex,False)
     else:
         plant_matrix = norows(field_matrix,2,False)
     #show_map(matrix_nonconvex)
@@ -67,13 +67,14 @@ def print_hi(name):
     print(np.nansum(uncertainty_matrix))
     scenario = 1
     #rig(uncertainty_matrix)
-    total_days=4
+    total_days=20
+    costmatrix=None #initialize for first day
     for day in range(1,total_days+1):
         if rowsbool:
-            [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_rows_matrix(
-                uncertainty_matrix, row_nrs, row_edges, field_vertex,scenario)
+            [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,costmatrix] = rig_rows_matrix(
+                uncertainty_matrix, row_nrs, row_edges, field_vertex,scenario,costmatrix)
         else:
-            [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration] = rig_matrix(uncertainty_matrix,scenario)
+            [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,costmatrix] = rig_matrix(uncertainty_matrix,scenario,costmatrix)
 
         # Set the sensor uncertainty and update the world model for the next day:
         sensoruncertainty=0

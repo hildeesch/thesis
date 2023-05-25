@@ -57,7 +57,7 @@ class NodeA:
         return self.position == other.position
 class IRrtStar:
     def __init__(self, x_start, x_goal, step_len,
-                 goal_sample_rate, search_radius, iter_max,uncertaintymatrix,row_nrs,row_edges,field_vertex,scenario):
+                 goal_sample_rate, search_radius, iter_max,uncertaintymatrix,row_nrs,row_edges,field_vertex,scenario,costmatrix):
         self.x_start = Node(x_start)
         self.x_goal = Node(x_goal)
         self.step_len = step_len
@@ -87,11 +87,13 @@ class IRrtStar:
         self.reductioncount = 0 # to count the shortening of range in Near()
         self.reduction = 0
 
-        self.budget=500
+        self.budget=1000
         self.inforadius=1
         self.scenario = scenario
-        self.kinematic = "dubins"  # kinematic constraint
+        self.kinematic = "none"  # kinematic constraint
         # choices: "none", "dubins", "reedsshepprev", "reedsshepp", "ranger", "limit"
+        if self.kinematic == "ranger" or self.kinematic=="limit":
+            self.angularcost=1 # set the turning cost (in rad)
         self.dubinsmat = {}
 
 
@@ -99,14 +101,21 @@ class IRrtStar:
         self.row_nrs = row_nrs
         self.row_edges = row_edges
         self.field_vertex = field_vertex # cornerpoints of the field
+        for vertex in self.field_vertex: #if the vertex is within a row, the xposition is made equal to the edge of the row (for simplicity)
+            for index,row in enumerate(self.row_nrs):
+                if vertex[1]==row:
+                    vertex[0]=self.row_edges[index][vertex[3]]
+                    #print("Vertex position changed")
         self.cost_left = np.zeros((len(self.row_nrs),len(self.row_nrs)))
         self.cost_right = np.zeros((len(self.row_nrs),len(self.row_nrs)))
         self.infopath_left = np.empty((len(self.row_nrs),len(self.row_nrs)),dtype = object )
         self.infopath_right = np.empty((len(self.row_nrs),len(self.row_nrs)),dtype = object )
         self.info_left = np.zeros((len(self.row_nrs),len(self.row_nrs)))
         self.info_right = np.zeros((len(self.row_nrs),len(self.row_nrs)))
-
-        self.costmatrix = np.empty((100*100,100*100) )
+        if costmatrix == None:
+            self.costmatrix = np.empty((100*100,100*100) )
+        else:
+            self.costmatrix = costmatrix
         #self.directionmatrix = np.empty((100*100,100*100),dtype = object )
         self.anglematrix = np.empty((100*100,100*100) )
         self.infopathmatrix = np.empty((100*100,100*100),dtype = object )
@@ -122,6 +131,9 @@ class IRrtStar:
             for index,row in enumerate(row_nrs):
                 for column in range(self.row_edges[index][0],self.row_edges[index][1]+1):
                     self.allpoints.append([column,row])
+        if len(self.allpoints)<self.iter_max:
+            self.iter_max=len(self.allpoints)
+            print("Number of iterations reducted to the maximal amount of points to be sampled: "+str(self.iter_max))
 
         self.rowdist=4
 
@@ -129,7 +141,7 @@ class IRrtStar:
         # 0 = sample, 1 = nearest, 2 = steer, 3 = near, 4 = rewiring, 5 = lastpath, 6 = pruning, 7 = total time
 
         self.maze = np.ones((100,100) ) # for A star
-        self.edgemaze = np.ones((100,100)) # for A star (to know where we can go up/down)
+        #self.edgemaze = np.ones((100,100)) # for A star (to know where we can go up/down)
 
 
     def init(self):
@@ -153,8 +165,8 @@ class IRrtStar:
         # im = ax1.imshow(self.maze, cmap=colormap, vmin=0, vmax=1, origin='lower')
         # ax1.set_title("A star maze")
         # fig.tight_layout()
-        #
         # plt.show()
+
         # fig, ax = plt.subplots()
         # colormap = cm.Greys
         # colormap.set_bad(color='black')
@@ -196,10 +208,11 @@ class IRrtStar:
         if self.kinematic not in ["none","limit","ranger","dubins","reedsshepp","reedsshepprev"]:
             print("Kinematic constraint setting unknown. Set one of the following: none,limit,ranger,dubins,reedsshepp,reedsshepprev")
             return None
-
-        for k in range(self.iter_max):
+        k=0
+        while k<self.iter_max:
+            k+=1
             #time.sleep(0.1)
-            if k>300-3: #only evaluate from when we might want it to stop
+            if k>40-3 or k>(self.iter_max-3): #only evaluate from when we might want it to stop
                 #print("Start countdown")
                 cost = {node: node.totalcost for node in self.X_soln}
                 info = {node: node.totalinfo for node in self.X_soln}
@@ -216,11 +229,11 @@ class IRrtStar:
                 if ((i_best-i_last_best)/i_last_best)<0.01: #smaller than 1% improvement
                     count_down-=1
                 else:
-                    count_down=10 #reset
+                    count_down=20 #reset
                     print("Reset countdown")
-            if k==301: # to test up to certain iteration
+            if k==151: # to test up to certain iteration
                 count_down=0
-            if count_down<=0 and k>300:
+            if count_down<=0 and (k>150 or k>(self.iter_max-3)):
                 print("Reached stopping criterion at iteration "+str(k))
                 break # we stop iterating if the best score is not improving much anymore and we already passed at least ... cycles
 
@@ -228,10 +241,11 @@ class IRrtStar:
                 print("ATTENTION!!! ATTENTION!!! ATTENTION!!! AGAIN FIFTY CYCLES FURTHER, CURRENT CYCLE ="+str(k)) # to know how far we are
             endlen=len(self.V)
             print("Nr of nodes added: "+str(endlen-startlen))
+            if (endlen-startlen)==0 and not double:
+                k-=1
             startlen = len(self.V)
-            #x_rand = self.Sample(c_best, dist, x_center, C)
             timestart = time.time()
-            x_rand = self.Sample()
+            x_rand = self.SampleFreeSpace()
             timeend= time.time()
             self.time[0]+=(timeend-timestart)
             timestart=time.time()
@@ -251,33 +265,30 @@ class IRrtStar:
                 if node.x == x_new.x and node.y == x_new.y:  # co-located nodes
                     double=True #there is already a node at this location, so we skip it
                     print("double")
+                    k-=1
                     break
             #if x_nearest.cost + self.Line(x_nearest, x_new) + self.Line(x_new, self.x_goal) < self.budget and not double:  # budget check for nearest parent (to make it more efficient)
             if not double:  # budget check for nearest parent (to make it more efficient)
                 # print(x_nearest.cost + self.Line(x_nearest, x_new) + self.Line(x_new, self.x_goal))
                 for x_near in self.Near(self.V,x_new):
 
-                    if x_new and not self.utils.is_collision(x_near, x_new):
-                        c_min = x_near.cost+self.FindCostInfoA(x_new.x,x_new.y,x_near.x,x_near.y,x_near,False,True) #cost from near node to new node
+                    c_min = x_near.cost+self.FindCostInfoA(x_new.x,x_new.y,x_near.x,x_near.y,x_near,False,True) #cost from near node to new node
 
 
-                        node_new = Node((x_new.x,x_new.y))
-                        node_new.parent = x_near #added
-                        node_new.cost = self.Cost(node_new) #+self.Line(x_new, self.x_goal)
-                        node_new.info = self.Info_cont(node_new)
-                        self.V.append(node_new) #generate a "node"/trajectory to each near point
+                    node_new = Node((x_new.x,x_new.y))
+                    node_new.parent = x_near #added
+                    node_new.cost = self.Cost(node_new) #+self.Line(x_new, self.x_goal)
+                    node_new.info = self.Info_cont(node_new)
+                    self.V.append(node_new) #generate a "node"/trajectory to each near point
 
 
-                        #if self.InGoalRegion(node_new):
-                        #if not self.utils.is_collision(node_new, self.x_goal):
-                        if c_min + self.FindCostInfoA(self.x_goal.x, self.x_goal.y, x_new.x, x_new.y, x_near,
-                                                      False,
-                                                      True) <= self.budget:  # extra check for budget for actual parent (cmin+ cost to goal node)
-                            self.X_soln.add(node_new)
-                        timestart=time.time()
-                        self.LastPath(node_new)
-                        timeend = time.time()
-                        self.time[5] += (timeend - timestart)
+                    timestart = time.time()
+                    self.LastPath(node_new)
+                    timeend = time.time()
+                    self.time[5] += (timeend - timestart)
+                    if node_new.totalcost <= self.budget:  # extra check for budget for actual parent (cmin+ cost to goal node)
+                        self.X_soln.add(node_new)
+
 
                 timestart=time.time()
                 self.Pruning(x_new)
@@ -304,25 +315,27 @@ class IRrtStar:
         [self.path,infopathradius] = self.ExtractPath(x_best)
         print(infopathradius)
         node = x_best
-        infopathlength=len(self.infopathmatrix[node.y*100+node.x,self.x_goal.y*100+self.x_goal.x])
-        finalpath= self.infopathmatrix[node.y*100+node.x,self.x_goal.y*100+self.x_goal.x]
-        checkcostscore=self.Line(node,self.x_goal)
-        while node.parent:
-            checkcostscore+=self.Line(node.parent,node)
-            infopathlength += len(self.infopathmatrix[node.parent.y*100+node.parent.x,node.y*100+node.x])
-            finalpath.extend(self.infopathmatrix[node.parent.y*100+node.parent.x,node.y*100+node.x])
-            node = node.parent
+        #infopathlength=len(self.infopathmatrix[node.y*100+node.x,self.x_goal.y*100+self.x_goal.x])
+        check = False
+        if check:
+            finalpath= self.infopathmatrix[node.y*100+node.x,self.x_goal.y*100+self.x_goal.x]
+            checkcostscore=self.Line(node,self.x_goal)
+            while node.parent:
+                checkcostscore+=self.Line(node.parent,node)
+                #infopathlength += len(self.infopathmatrix[node.parent.y*100+node.parent.x,node.y*100+node.x])
+                finalpath.extend(self.infopathmatrix[node.parent.y*100+node.parent.x,node.y*100+node.x])
+                node = node.parent
 
-        checkinfoscore=0
-        difflist=[]
-        for element in finalpath:
-            if not element in difflist:
-                checkinfoscore+=self.uncertaintymatrix[int(element[1]),int(element[0])]
-                difflist.append(element)
+            checkinfoscore=0
+            difflist=[]
+            for element in finalpath:
+                if not element in difflist:
+                    checkinfoscore+=self.uncertaintymatrix[int(element[1]),int(element[0])]
+                    difflist.append(element)
 
-        print("Node info (without last part): "+str(x_best.info)+" Node cost (without last part): "+(str(x_best.cost)))
-        print("Info node to end: "+str(self.infomatrix[x_best.y*100+x_best.x,self.x_start.y*100+self.x_start.x]))
-        print(" Check info: "+str(checkinfoscore)+" Check costs: "+str(checkcostscore))
+            print("Node info (without last part): "+str(x_best.info)+" Node cost (without last part): "+(str(x_best.cost)))
+            print("Info node to end: "+str(self.infomatrix[x_best.y*100+x_best.x,self.x_start.y*100+self.x_start.x]))
+            print(" Check info: "+str(checkinfoscore)+" Check costs: "+str(checkcostscore))
         print("Total number of nodes: "+str(len(self.V)))
 
 
@@ -333,9 +346,15 @@ class IRrtStar:
             plt.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
             node = x_best
             while node.parent:
-                # reachedparent=False
                 prevpoint = [node.x, node.y]
-                infopath = self.infopathmatrix[node.parent.y * 100 + node.parent.x, node.y * 100 + node.x]
+                # reachedparent=False
+                if self.kinematic!="dubins" and self.kinematic!="reedsshepp":
+                    infopath = self.infopathmatrix[node.parent.y * 100 + node.parent.x, node.y * 100 + node.x]
+                else:
+                    start = [node.parent.x, node.parent.y]
+                    end = [node.x, node.y]
+                    [infoastar, costastar] = self.search(start, end)  # A star steps
+                    infopath = self.getInfopath(node.x, node.y, node.parent.x, node.parent.y, node.parent,infoastar)[0]
                 for point in infopath[::-1]:
                     # reachedparent= (point[0]==node.parent.x and point[1]==node.parent.y)
 
@@ -400,7 +419,7 @@ class IRrtStar:
             plt.scatter(k_list,i_list)
             plt.show
 
-        return self.path, infopathradius, x_best.totalcost, x_best.totalinfo, self.budget, self.step_len, self.search_radius, k
+        return self.path, infopathradius, x_best.totalcost, x_best.totalinfo, self.budget, self.step_len, self.search_radius, k, self.costmatrix
 
     def FindInfo(self, node_end_x, node_end_y, node_start_x, node_start_y, currentinfopath, distance, totalpath=True):
         # node_end = the goal or new node
@@ -434,8 +453,8 @@ class IRrtStar:
         for index in range(len(self.row_nrs)-1):
             self.maze[self.row_nrs[index],self.row_edges[index][0]]=0
             self.maze[self.row_nrs[index],self.row_edges[index][1]]=0
-            self.edgemaze[self.row_nrs[index],self.row_edges[index][0]]=0
-            self.edgemaze[self.row_nrs[index],self.row_edges[index][1]]=0
+            # self.edgemaze[self.row_nrs[index],self.row_edges[index][0]]=0
+            # self.edgemaze[self.row_nrs[index],self.row_edges[index][1]]=0
 
         for index in range(len(self.row_nrs)-1):
             self.cost_left[index][index+1] = math.hypot(self.row_nrs[index + 1] - self.row_nrs[index],
@@ -456,13 +475,13 @@ class IRrtStar:
 
                 for gridpoint in infopath:
                     self.maze[gridpoint[1],gridpoint[0]]=0
-                    self.edgemaze[gridpoint[1],gridpoint[0]]=0
+                    #self.edgemaze[gridpoint[1],gridpoint[0]]=0
                     width_path=2
                     for i in range(width_path):
                         self.maze[gridpoint[1], gridpoint[0]+(i+1)] = 0
-                        self.edgemaze[gridpoint[1], gridpoint[0]+(i+1)] = 0
+                        #self.edgemaze[gridpoint[1], gridpoint[0]+(i+1)] = 0
                         self.maze[gridpoint[1], gridpoint[0] - (i + 1)] = 0
-                        self.edgemaze[gridpoint[1], gridpoint[0] - (i + 1)] = 0
+                        #self.edgemaze[gridpoint[1], gridpoint[0] - (i + 1)] = 0
 
             self.cost_right[index][index+1] = math.hypot(self.row_nrs[index + 1] - self.row_nrs[index],
                          self.row_edges[index + 1][1] - self.row_edges[index][1])  # note: this distance is not really in the y-direction, but from edge to edge point
@@ -481,14 +500,14 @@ class IRrtStar:
             if True: # for now
                 for gridpoint in infopath:
                     self.maze[gridpoint[1],gridpoint[0]]=0
-                    self.edgemaze[gridpoint[1],gridpoint[0]]=0
+                    #self.edgemaze[gridpoint[1],gridpoint[0]]=0
 
                     #width_path=2
                     for i in range(width_path):
                         self.maze[gridpoint[1], gridpoint[0]-(i+1)] = 0
-                        self.edgemaze[gridpoint[1], gridpoint[0]-(i+1)] = 0
+                        #self.edgemaze[gridpoint[1], gridpoint[0]-(i+1)] = 0
                         self.maze[gridpoint[1], gridpoint[0] + (i + 1)] = 0
-                        self.edgemaze[gridpoint[1], gridpoint[0] + (i + 1)] = 0
+                        #self.edgemaze[gridpoint[1], gridpoint[0] + (i + 1)] = 0
 
         for index1 in range(len(self.row_nrs)):
             for index2 in range(len(self.row_nrs)):
@@ -543,8 +562,8 @@ class IRrtStar:
             start_value += 1
         return path, current_node.g
 
-    def search(self,maze, edgemaze, start, end):
-        #TODO: why do we pass maze/ edgemaze as arguments (while they're in the self)
+    def search(self,start, end):
+        maze = self.maze
         """
             Returns a list of tuples as a path from the given start to the given end in the given maze
             :param maze:
@@ -631,7 +650,7 @@ class IRrtStar:
             # if we hit this point return the path such as it may be no solution or
             # computation cost is too high
             if outer_iterations > max_iterations:
-                print("giving up on pathfinding too many iterations")
+                print("Giving up on A* - too many iterations")
                 return self.return_path(current_node, maze)
 
             # Pop current node out off yet_to_visit list, add to visited list
@@ -650,6 +669,8 @@ class IRrtStar:
             # move options dubins/ reedsshepp:
             if self.kinematic=="dubins" or self.kinematic=="reedsshepp":
                 move = []
+
+                # Checking whether the current position is on a row edge or at a vertex
                 cur_index = self.row_nrs.index(current_node.position[1])
                 booledge = False
                 if self.row_edges[cur_index][1] == current_node.position[0]:
@@ -664,6 +685,8 @@ class IRrtStar:
                         boolvertex = True
                         boolright = vertex[3]
                         break
+
+                # if the current position is an edge or vertex and it's not at the same side of a vertex as the start/end, the start/end location is not a possible move
                 if booledge or boolvertex:
                     # for index in range(len(self.row_nrs) - 1):  # all edges on same side
                     #     move.append([self.row_edges[index][boolright], self.row_nrs[index]])
@@ -693,14 +716,15 @@ class IRrtStar:
                     # includeend=True # for now
                     if includeend:
                         move.append([self.row_edges[end_index][boolright], end_node.position[1]])
-                    if not boolvertex:
+                    if not boolvertex or (boolvertex and current_node.position[1] in self.row_nrs): # vertex but also a row
                         move.append([self.row_edges[cur_index][abs(boolright - 1)],
                                      self.row_nrs[cur_index]])  # edge on other side of current row
-
-                if not boolvertex and booledge:
+                # if the current position is within a row, any position within the row is a possible move
+                if not boolvertex and booledge or (boolvertex and current_node.position[1] in self.row_nrs):
                     for xpos in range(self.row_edges[cur_index][0],
                                       self.row_edges[cur_index][1]):  # any point within the row
                         move.append([xpos, self.row_nrs[cur_index]])
+                # if the current position is not an edge or vertex, the only move possible is the end of the row (left or right)
                 if not boolvertex and not booledge:
                     move.append([self.row_edges[cur_index][0],
                                  self.row_nrs[cur_index]])
@@ -748,7 +772,7 @@ class IRrtStar:
                     #includeend=True # for now
                     if includeend:
                         move.append([self.row_edges[end_index][boolright],end_node.position[1]])
-                    if not boolvertex:
+                    if not boolvertex or (boolvertex and current_node.position[1] in self.row_nrs):
                         move.append([self.row_edges[cur_index][abs(boolright - 1)], self.row_nrs[cur_index]]) # edge on other side of current row
 
 
@@ -757,7 +781,7 @@ class IRrtStar:
                     # move.append([current_node.position[0] + 1, current_node.position[1]])  # 1 step right
                     move.append([self.row_edges[cur_index][0], self.row_nrs[cur_index]]) # edge on either side of current row
                     move.append([self.row_edges[cur_index][1], self.row_nrs[cur_index]])  # edge on either side of current row
-                if not boolvertex:
+                if not boolvertex or (boolvertex and current_node.position[1] in self.row_nrs):
                     for xpos in range(self.row_edges[cur_index][0],self.row_edges[cur_index][1]): #any point within the row
                         move.append([xpos,self.row_nrs[cur_index]])
                 # print(current_node.position)
@@ -846,7 +870,6 @@ class IRrtStar:
         #if not cost or (not info):
         if not cost or (not info and not costOnly):
             #print("cost: "+str(cost)+" costonly: "+str(costOnly))
-            info=0
             # a star
             #maze=self.maze
             start=[node_start_x,node_start_y]
@@ -854,61 +877,8 @@ class IRrtStar:
             #end = [node_start_x+20,node_start_y]
             #print(start +end)
 
-            [infopath,cost] = self.search(self.maze, self.edgemaze, start, end)
-            if self.kinematic=="none" or self.kinematic=="ranger" or self.kinematic=="limit":
-                cost = 0
-                infopathastar=infopath
-                infopath=[]
-                for i in range(len(infopathastar)-1):
-                    dcost = np.sqrt((infopathastar[i+1][0]-infopathastar[i][0])**2+(infopathastar[i+1][1]-infopathastar[i][1])**2)
-                    cost+=dcost
-                    # Ranger kinematic constraints: taking time to turn
-                    if self.kinematic == "ranger":
-                        angularcost = 1  # how much cost per rad
-                        curangle = math.atan2(infopathastar[i + 1][1] - infopathastar[i][1],
-                                              infopathastar[i + 1][0] - infopathastar[i][0])
-                        if i > 0:
-                            prevangle = math.atan2(infopathastar[i][1] - infopathastar[i - 1][1],
-                                                   infopathastar[i][0] - infopathastar[i - 1][0])
-                        else:
-                            prevangle = curangle  # TODO fix this: we cannot know the parent so we cannot know the dangle for the first part
-                        dangle = (curangle - prevangle) ** 2
-                        cost += dangle * angularcost
-                    # Limited angle kinematic constraint
-                    if self.kinematic == "limit":
-                        angularcost=1
-                        anglelimit = 2 * math.pi / 4  # 90 degrees
-                        curangle = math.atan2(infopathastar[i+1][1]-infopathastar[i][1], infopathastar[i+1][0]-infopathastar[i][0])
-                        if i>0:
-                            prevangle= math.atan2(infopathastar[i][1]-infopathastar[i-1][1], infopathastar[i][0]-infopathastar[i-1][0])
-                        else:
-                            prevangle = curangle #TODO fix this: we cannot know the parent so we cannot know the dangle for the first part
-                        dangle = (curangle-prevangle)**2
-                        cost += dangle * angularcost
-                        if (dangle > (anglelimit ** 2)):
-                            cost += np.inf  # if the angle exceeds the limit, inf is added
-                    infopath.extend(self.FindInfo(infopathastar[i+1][0],infopathastar[i+1][1],infopathastar[i][0],infopathastar[i][1],None,dcost,False)[0])
-            if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="reedsshepprev":
-                cost = 0
-                infopathastar = infopath
-                infopath = []
-                if node.parent!=None:
-                    prevnode=[node.parent.x,node.parent.y]
-                else:
-                    prevnode=None
-                for i in range(len(infopathastar) - 1):
-                    boolvertex = False
-                    for vertex in self.field_vertex:
-                        if infopathastar[i + 1][0] == vertex[0] and infopathastar[i + 1][1] == vertex[1]:
-                            boolvertex = True
-                            break
-                    if boolvertex:
-                        [dcost, dubins_x, dubins_y, infopathpart] = self.getDubins(infopathastar[i], infopathastar[i + 1],prevnode,True)  # twist end point 180 degrees around for more logical path
-                    else:
-                        [dcost,dubins_x,dubins_y,infopathpart] = self.getDubins(infopathastar[i],infopathastar[i+1],prevnode)
-                    cost += dcost
-                    infopath.extend(infopathpart)
-                    prevnode=infopathastar[i]
+            [infopath,cost] = self.search(start, end) # A star steps
+            [infopath,cost,info] = self.getInfopath(node_end_x, node_end_y, node_start_x, node_start_y, node,infopath) # actual cost and infopath
                     # if boolvertex:
                     #     prevnode=True
             infopathnew = []
@@ -934,36 +904,7 @@ class IRrtStar:
             # plt.show()
 
             #if not costOnly:
-            infopathcopy=deepcopy(infopath)
-            for i,infopoint in enumerate(infopathcopy):
-                #if np.isnan(self.uncertaintymatrix[infopoint[1], infopoint[0]]) and self.maze[infopoint[1],infopoint[0]]!=0: #not within allowed width around edges or within a row
-                if self.maze[infopoint[1],infopoint[0]]!=0: #not within allowed width around edges or within a row
-                    if infopathcopy[i-1][1]!=infopoint[1]:
-                        cost=np.inf
-                        break;
-                if not np.isnan(self.uncertaintymatrix[infopoint[1], infopoint[0]]) and not [infopoint[0],infopoint[1]] in infopath:
-                    info += self.uncertaintymatrix[infopoint[1], infopoint[0]]
-                infopath.append(infopoint)
-                if self.inforadius > 0:
-                    for rowdist in range(-self.inforadius, self.inforadius + 1):
-                        for coldist in range(-self.inforadius, self.inforadius + 1):
-                            if (coldist ** 2 + rowdist ** 2) <= self.inforadius ** 2:  # radius
-                                xpoint_ = infopoint[0] + coldist
-                                ypoint_ = infopoint[1] + rowdist
-                                if not [xpoint_, ypoint_] in infopath and not np.isnan(
-                                        self.uncertaintymatrix[ypoint_, xpoint_]):
-                                    # info += self.uncertaintymatrix[ypoint_, xpoint_]
-                                    infopath.append([xpoint_, ypoint_])
 
-            self.infomatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = info
-            self.infomatrix[
-                node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = info  # mirror the matrix
-
-            self.costmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = cost
-            self.costmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = cost #mirror the matrix
-
-            self.infopathmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = infopath
-            self.infopathmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = infopath[::-1]
 
             # for index, infopoint in enumerate(infopath):
             #     if infopoint[1]==node_start_y:
@@ -992,8 +933,14 @@ class IRrtStar:
         while curnode.parent:
             # print("index 1 = " + str(curnode.parent.y*100+curnode.parent.x) + " index 2 = " + str(
             #    curnode.y*100+curnode.x))
-            currentinfopath.extend(
-                self.infopathmatrix[curnode.parent.y * 100 + curnode.parent.x, curnode.y * 100 + curnode.x])
+            if self.kinematic!="dubins" and self.kinematic!="reedsshepp":
+                currentinfopath.extend(
+                    self.infopathmatrix[curnode.parent.y * 100 + curnode.parent.x, curnode.y * 100 + curnode.x])
+            else:
+                start = [curnode.parent.x, curnode.parent.y]
+                end = [curnode.x, curnode.y]
+                [infoastar, costastar] = self.search(start, end)  # A star steps
+                currentinfopath.extend(self.getInfopath(curnode.x,curnode.y,curnode.parent.x,curnode.parent.y,curnode.parent,infoastar)[0])
             curnode = curnode.parent
         if not any(element in currentinfopath for element in infopath):  # the whole infopath is new
             infonode += info
@@ -1003,6 +950,111 @@ class IRrtStar:
                     infonode += self.uncertaintymatrix[element[1], element[0]]
         return cost, infonode
         # return [cost,infopath,info]
+    def getInfopath(self, node_end_x, node_end_y, node_start_x, node_start_y, node,infopathastar):
+        info = 0
+        if self.kinematic == "none" or self.kinematic == "ranger" or self.kinematic == "limit":
+            cost = 0
+            #infopathastar = infopath
+            infopath = []
+            for i in range(len(infopathastar) - 1):
+                dcost = np.sqrt((infopathastar[i + 1][0] - infopathastar[i][0]) ** 2 + (
+                            infopathastar[i + 1][1] - infopathastar[i][1]) ** 2)
+                cost += dcost
+                # Ranger kinematic constraints: taking time to turn
+                if self.kinematic == "ranger":
+                    curangle = math.atan2(infopathastar[i + 1][1] - infopathastar[i][1],
+                                          infopathastar[i + 1][0] - infopathastar[i][0])
+                    if i > 0:
+                        prevangle = math.atan2(infopathastar[i][1] - infopathastar[i - 1][1],
+                                               infopathastar[i][0] - infopathastar[i - 1][0])
+                    elif i==0 and node.parent!=None:
+                        prevangle = self.anglematrix[node.parent.y * 100 + node.parent.x, node.y * 100 + node.x]
+                    else:
+                        prevangle = curangle
+                    dangle = (curangle - prevangle) ** 2
+                    cost += np.sqrt(dangle) * self.angularcost
+                # Limited angle kinematic constraint
+                if self.kinematic == "limit":
+                    anglelimit = 2 * math.pi / 4  # 90 degrees
+                    curangle = math.atan2(infopathastar[i + 1][1] - infopathastar[i][1],
+                                          infopathastar[i + 1][0] - infopathastar[i][0])
+                    if i > 0:
+                        prevangle = math.atan2(infopathastar[i][1] - infopathastar[i - 1][1],
+                                               infopathastar[i][0] - infopathastar[i - 1][0])
+                    elif i == 0 and node.parent != None:
+                        prevangle = self.anglematrix[node.parent.y * 100 + node.parent.x, node.y * 100 + node.x]
+                    else:
+                        prevangle = curangle
+                    dangle = (curangle - prevangle) ** 2
+                    if (dangle > (anglelimit ** 2)):
+                        cost += np.inf  # if the angle exceeds the limit, inf is added
+                    else:
+                        cost += np.sqrt(dangle) * self.angularcost
+
+                infopath.extend(self.FindInfo(infopathastar[i + 1][0], infopathastar[i + 1][1], infopathastar[i][0],
+                                              infopathastar[i][1], None, dcost, False)[0])
+            self.anglematrix[node_start_y * 100 + node_start_x,node_end_y * 100 + node_end_x] = curangle # last angle of the piece
+        if self.kinematic == "dubins" or self.kinematic == "reedsshepp" or self.kinematic == "reedsshepprev":
+            cost = 0
+            #infopathastar = infopath
+            infopath = []
+            if node.parent != None:
+                prevnode = [node.parent.x, node.parent.y]
+            else:
+                prevnode = None
+            for i in range(len(infopathastar) - 1):
+                boolvertex = False
+                for vertex in self.field_vertex:
+                    if infopathastar[i + 1][0] == vertex[0] and infopathastar[i + 1][1] == vertex[1]:
+                        boolvertex = True
+                        break
+                if boolvertex:
+                    [dcost, dubins_x, dubins_y, infopathpart] = self.getDubins(infopathastar[i], infopathastar[i + 1],
+                                                                               prevnode,
+                                                                               True)  # twist end point 180 degrees around for more logical path
+                else:
+                    [dcost, dubins_x, dubins_y, infopathpart] = self.getDubins(infopathastar[i], infopathastar[i + 1],
+                                                                               prevnode)
+                cost += dcost
+                infopath.extend(infopathpart)
+                prevnode = infopathastar[i]
+
+        infopathcopy = deepcopy(infopath)
+        infopath = []
+        for i, infopoint in enumerate(infopathcopy):
+            # if np.isnan(self.uncertaintymatrix[infopoint[1], infopoint[0]]) and self.maze[infopoint[1],infopoint[0]]!=0: #not within allowed width around edges or within a row
+            if self.maze[infopoint[1], infopoint[0]] != 0:  # not within allowed width around edges or within a row
+                if infopathcopy[i - 1][1] != infopoint[1]:
+                    cost = np.inf
+                    break;
+            if not np.isnan(self.uncertaintymatrix[infopoint[1], infopoint[0]]) and not [infopoint[0],
+                                                                                         infopoint[1]] in infopath:
+                info += self.uncertaintymatrix[infopoint[1], infopoint[0]]
+                infopath.append(infopoint)
+            if self.inforadius > 0:
+                for rowdist in range(-self.inforadius, self.inforadius + 1):
+                    for coldist in range(-self.inforadius, self.inforadius + 1):
+                        if (coldist ** 2 + rowdist ** 2) <= self.inforadius ** 2:  # radius
+                            xpoint_ = infopoint[0] + coldist
+                            ypoint_ = infopoint[1] + rowdist
+                            if not [xpoint_, ypoint_] in infopath and not np.isnan(
+                                    self.uncertaintymatrix[ypoint_, xpoint_]):
+                                info += self.uncertaintymatrix[ypoint_, xpoint_]
+                                infopath.append([xpoint_, ypoint_])
+
+        if self.kinematic != "dubins" and self.kinematic != "reedsshepp":
+            self.infomatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = info
+            self.infomatrix[
+                node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = info  # mirror the matrix
+
+            self.costmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = cost
+            self.costmatrix[
+                node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = cost  # mirror the matrix
+
+            self.infopathmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = infopath
+            self.infopathmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = infopath[::-1]
+        return infopath,cost,info
+
     def getDubins(self,node_start,node_end,node_prev,turnend=False):
         #print("getDubinsfunction")
         #print(last)
@@ -1011,7 +1063,7 @@ class IRrtStar:
             syaw = self.anglematrix[node_prev[1] * 100 + node_prev[0],node_start[1] * 100 + node_start[0]]
         elif node_prev!=None and not np.any(self.anglematrix[node_prev[1] * 100 + node_prev[0],node_start[1] * 100 + node_start[0]]):
             #print("missing the angle, getting it from the path")
-            [infopath, cost] = self.search(self.maze, self.edgemaze, node_prev, node_start)
+            [infopath, cost] = self.search(node_prev, node_start)
             if len(infopath)>=2:
                 syaw = self.anglematrix[infopath[-2][1] * 100 + infopath[-2][0],infopath[-1][1] * 100 + infopath[-1][0]]
         if syaw==None: #still need to find syaw after the two things tried above
@@ -1167,208 +1219,6 @@ class IRrtStar:
             #                     infopath.append([xpoint_, ypoint_])
         return cost,dubins_x,dubins_y,infopath
 
-    def FindCostInfo(self, node_end_x, node_end_y, node_start_x, node_start_y, node, totalpath=True, costOnly=False):
-        # node_end = the goal or new node
-        # node_start = the (potential) parent
-        # currentcost = cost of the parent (node_start)
-        # currentinfopath = the infopath of the parent (node_start)
-        # costOnly = shortcut in case we only want the distance and not the info
-
-        cost = self.costmatrix[node_start_y*100+node_start_x, node_end_y*100+node_end_x]
-        node_direction = self.directionmatrix[node_start_y*100+node_start_x, node_end_y*100+node_end_x]
-
-        info = self.infomatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x]
-        infopath = self.infopathmatrix[node_start_y * 100 + node_start_x,node_end_y * 100 + node_end_x]
-
-        if not cost or (costOnly==False and infopath==None): # element is empty or we need the variables for finding the infopath later
-            #print("calculating distance for entry in matrix, x = " + str(node_start.x) + ", y = " + str(
-            #    node_start.y) + ", x = " + str(node_end.x) + ", y = " + str(node_end.y))
-            #print("index 1 = " + str(node_start.y * 100 + node_start.x) + " index 2 = " + str(
-            #    node_end.y * 100 + node_end.x))
-            if node_end_y == node_start_y:  # in the same row
-                dxright = abs(node_end_x - node_start_x)
-                if node_end_x < node_start_x:
-                    direction = "left"
-                    dx = dxright
-                else:
-                    direction = "right"
-                    dx = dxright  # makes no difference for left or right
-                dy = 0
-                node_direction = [direction, "none"]
-            else:  # not in same row
-                index_start = self.row_nrs.index(node_start_y)
-                index_end = self.row_nrs.index(node_end_y)
-                dxleft = node_end_x - self.row_edges[index_end][0] + node_start_x - self.row_edges[index_start][0]
-                dxright = self.row_edges[index_end][1] - node_end_x + self.row_edges[index_start][1] - node_start_x
-                if dxright < dxleft:
-                    direction = "right"
-                    # print("direction RIGHT")
-                    start_edge_x = self.row_edges[index_start][1]
-                    end_edge_x = self.row_edges[index_end][1]
-                    dx = dxright
-                else:
-                    direction = "left"
-                    # print("direction LEFT")
-                    start_edge_x = self.row_edges[index_start][0]
-                    end_edge_x = self.row_edges[index_end][0]
-                    dx = dxleft
-                if index_end > index_start:
-                    updown = "up"
-                else:
-                    updown = "down"
-                dy = 0
-                edgepath = []
-                # for index,edgepoint in enumerate(self.row_edges[index_start:index_end+1]):
-                #     if direction=="left":
-                #         #dy+= math.hypot(self.row_nrs[index+1] - self.row_nrs[index], self.row_edges[index+1][0]-self.row_edges[index][0]) #note: this distance is not really in the y-direction, but from edge to edge point
-                #         dy+= self.cost_left[index][index+1]
-                #         #edgepath.append([self.row_edges[index][0],self.row_nrs[index]])
-                #     elif direction=="right":
-                #         #dy+= math.hypot(self.row_nrs[index+1] - self.row_nrs[index], self.row_edges[index+1][1]-self.row_edges[index][1]) #note: this distance is not really in the y-direction, but from edge to edge point
-                #         dy += self.cost_right[index][index + 1]
-                #         #edgepath.append([self.row_edges[index][1],self.row_nrs[index]])
-                if direction == "left":
-                    # dy+= math.hypot(self.row_nrs[index+1] - self.row_nrs[index], self.row_edges[index+1][0]-self.row_edges[index][0]) #note: this distance is not really in the y-direction, but from edge to edge point
-                    dy += self.cost_left[index_start][index_end]
-                    # edgepath.append([self.row_edges[index][0],self.row_nrs[index]])
-                elif direction == "right":
-                    # dy+= math.hypot(self.row_nrs[index+1] - self.row_nrs[index], self.row_edges[index+1][1]-self.row_edges[index][1]) #note: this distance is not really in the y-direction, but from edge to edge point
-                    dy += self.cost_right[index_start][index_end]
-                    # edgepath.append([self.row_edges[index][1],self.row_nrs[index]])
-
-                # dy = math.hypot(self.row_nrs[index_end] - self.row_nrs[index_start], end_edge_x-start_edge_x) #note: this distance is not really in the y-direction, but from edge to edge point
-
-                node_direction = [direction, updown]
-            cost = dx + dy
-            self.costmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = cost
-            self.costmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = cost #mirror the matrix
-            self.directionmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = node_direction
-            self.directionmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = node_direction
-
-
-        if costOnly:
-            return cost
-        #infopath = []
-        # if totalpath:
-        #     # for point in currentinfopath:
-        #     #     infopath.append(point)
-        #     infopath.extend(currentinfopath)
-        #info = 0
-        # node.parent --> node
-        # node --> self.x_goal
-
-
-        if infopath ==None:
-            infopath=[]
-            info=0
-            if node_direction == ["left", "none"]:
-                for xpoint in range(node_start_x, node_end_x - 1, -1):
-                    ypoint = node_start_y
-                    # if [xpoint,
-                    #     ypoint] not in currentinfopath:  # only info value when the point is not already monitored before
-                    info += self.uncertaintymatrix[ypoint, xpoint]
-                    if np.isnan(self.uncertaintymatrix[ypoint, xpoint]):
-                        self.costmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = np.inf
-                        self.costmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = np.inf # mirror the matrix
-                    infopath.append([xpoint, ypoint])
-            if node_direction == ["right", "none"]:
-                for xpoint in range(node_start_x, node_end_x + 1):
-                    ypoint = node_start_y
-                    # if [xpoint,
-                    #     ypoint] not in currentinfopath:  # only info value when the point is not already monitored before
-                    info += self.uncertaintymatrix[ypoint, xpoint]
-                    if np.isnan(self.uncertaintymatrix[ypoint, xpoint]):
-                        self.costmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = np.inf
-                        self.costmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = np.inf # mirror the matrix
-
-                    infopath.append([xpoint, ypoint])
-            if node_direction == ["left", "up"] or node_direction == ["left","down"]:
-                for xpoint in range(node_start_x, start_edge_x-1, -1):
-                    ypoint = node_start_y
-                    # if [xpoint,
-                    #     ypoint] not in currentinfopath:  # only info value when the point is not already monitored before
-                    info += self.uncertaintymatrix[ypoint, xpoint]
-                    if np.isnan(self.uncertaintymatrix[ypoint, xpoint]):
-                        self.costmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = np.inf
-                        self.costmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = np.inf  # mirror the matrix
-                    infopath.append([xpoint, ypoint])
-
-                infopoints = self.infopath_left[index_start][index_end]
-                for infopoint in infopoints:
-                    #if infopoint not in currentinfopath:
-                        # infopath.append(infopoint)
-                        # info += self.info_left[index][index+1]
-                        # break
-                    info += self.uncertaintymatrix[infopoint[1],infopoint[0]]
-                    #if np.isnan(self.uncertaintymatrix[infopoint[1],infopoint[0]]):
-                    #    self.costmatrix[node_start_y * 100 + node_start_x][node_end_y * 100 + node_end_x] = np.inf
-                    infopath.append(infopoint)
-
-                for xpoint in range(end_edge_x, node_end_x + 1):
-                    ypoint = node_end_y
-                    # if [xpoint,
-                    #     ypoint] not in currentinfopath:  # only info value when the point is not already monitored before
-                    info += self.uncertaintymatrix[ypoint, xpoint]
-                    if np.isnan(self.uncertaintymatrix[ypoint, xpoint]):
-                        self.costmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = np.inf
-                        self.costmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = np.inf # mirror the matrix
-                    infopath.append([xpoint, ypoint])
-
-            if node_direction == ["right", "up"] or node_direction==["right","down"]:
-                for xpoint in range(node_start_x, start_edge_x):
-                    ypoint = node_start_y
-                    #if [xpoint,ypoint] not in currentinfopath:  # only info value when the point is not already monitored before
-                    info += self.uncertaintymatrix[ypoint, xpoint]
-                    if np.isnan(self.uncertaintymatrix[ypoint, xpoint]):
-                        self.costmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = np.inf
-                        self.costmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = np.inf # mirror the matrix
-                    infopath.append([xpoint, ypoint])
-
-                infopoints = self.infopath_right[index_start][index_end]
-                for infopoint in infopoints:
-                    #if infopoint not in currentinfopath:
-                        # infopath.append(infopoint)
-                        # info += self.info_right[index][index+1]
-                        # break
-                    info += self.uncertaintymatrix[infopoint[1],infopoint[0]]
-                    #if np.isnan(self.uncertaintymatrix[infopoint[1],infopoint[0]]):
-                    #    self.costmatrix[node_start_y * 100 + node_start_x][node_end_y * 100 + node_end_x] = np.inf
-                    infopath.append(infopoint)
-
-                for xpoint in range(end_edge_x, node_end_x - 1, -1):
-                    ypoint = node_end_y
-                    #if [xpoint,
-                    #    ypoint] not in currentinfopath:  # only info value when the point is not already monitored before
-                    if np.isnan(self.uncertaintymatrix[ypoint, xpoint]):
-                        self.costmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = np.inf
-                        self.costmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = np.inf # mirror the matrix
-                    else:
-                        info += self.uncertaintymatrix[ypoint, xpoint]
-                    infopath.append([xpoint, ypoint])
-
-            self.infomatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = info
-            self.infomatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = info # mirror the matrix
-            self.infopathmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = infopath
-            self.infopathmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = infopath[::-1]
-
-        infopath=infopath
-        infonode = 0
-        currentinfopath=[]
-        curnode = node
-
-        while curnode.parent:
-            #print("index 1 = " + str(curnode.parent.y*100+curnode.parent.x) + " index 2 = " + str(
-            #    curnode.y*100+curnode.x))
-            currentinfopath.extend(self.infopathmatrix[curnode.parent.y*100+curnode.parent.x, curnode.y*100+curnode.x])
-            curnode= curnode.parent
-        if not any(element in currentinfopath for element in infopath): # the whole infopath is new
-            infonode+=info
-        else: #if some infopoints overlap
-            for element in infopath:
-                if not element in currentinfopath:
-                    infonode+=self.uncertaintymatrix[element[1],element[0]]
-        return cost,infonode
-        #return [cost,infopath,info]
     def Rewiring_afterv2(self, best_node): #rewiring afterwards
         # goal: gain more info while remaining within the budget
         print("Start rewiring after v2")
@@ -1640,106 +1490,9 @@ class IRrtStar:
                     if nochildren:
                         if node1 in self.V: #still have to figure out why this is needed (TODO)
                             self.V.remove(node1)
-                        #nodelist.pop(index)
-                        #costlist.pop(index)
-                        #infolist.pop(index)
-                        #costlist[index]=np.nan
-                        #infolist[index]=np.nan
-                        # TODO still: how to "pop" or "remove" from the list we iterate over? to speed up pruningz
                         if node1 in self.X_soln:
                             self.X_soln.remove(node1)  # also from the solutions
 
-    def Steer(self, x_start, x_goal):
-        #dist, theta = self.get_distance_and_angle(x_start, x_goal)
-        dist = self.FindCostInfoA(x_goal.x,x_goal.y,x_start.x,x_start.y,x_start,False,True)
-
-        # closer=False
-        # if dist>self.step_len:
-        #     #just for now for debugging purposes
-        #     closer=True
-        maxdist = self.step_len-self.reduction
-        if dist<=maxdist:
-            #print("x_rand close enough, x_rand = x_new --> x_rand=("+str(x_goal.x)+","+str(x_goal.y)+")")
-            print("nearest=(" + str(x_start.x) + "," + str(x_start.y) + ") - x_rand=(" + str(x_goal.x) + "," + str(
-                x_goal.y) + ") - dist = " + str(dist) + " - x_new=(" + str(x_goal.x) + "," + str(
-                x_goal.y) + ")")
-
-            #return x_goal
-            return Node((int(x_goal.x), int(x_goal.y)))
-        distleft = self.FindCostInfoA(self.row_edges[self.row_nrs.index(x_goal.y)][0], self.row_nrs[self.row_nrs.index(x_goal.y)], x_start.x, x_start.y,
-                                     x_start, False, True)
-        distright = self.FindCostInfoA(self.row_edges[self.row_nrs.index(x_goal.y)][1], self.row_nrs[self.row_nrs.index(x_goal.y)], x_start.x, x_start.y,
-                                      x_start, False, True)
-        boolright = 0
-        if distright<distleft:
-            boolright=1 #bool right means right is shorter if boolright=1
-        #sampling within the end row
-        withinbounds=True
-        distance=5
-        while withinbounds and dist>maxdist:
-            if boolright==1:
-                xpoint = x_goal.x+distance
-                ypoint = self.row_nrs[self.row_nrs.index(x_goal.y)]
-                if xpoint>=self.row_edges[self.row_nrs.index(x_goal.y)][boolright]:
-                    withinbounds=False
-                else:
-                    dist = self.FindCostInfoA(xpoint,ypoint, x_start.x, x_start.y,
-                                         x_start, False, True)
-
-            else:
-                xpoint = x_goal.x-distance
-                ypoint = self.row_nrs[self.row_nrs.index(x_goal.y)]
-                if xpoint<=self.row_edges[self.row_nrs.index(x_goal.y)][boolright]:
-                    withinbounds=False
-                else:
-                    dist = self.FindCostInfoA(xpoint, ypoint, x_start.x, x_start.y,
-                                             x_start, False, True)
-            distance+=5
-
-        index = self.row_nrs.index(x_goal.y)
-        while dist>maxdist:
-            xpoint = self.row_edges[index][boolright]
-            ypoint = self.row_nrs[index]
-            dist= self.FindCostInfoA(xpoint,ypoint, x_start.x, x_start.y,
-                                     x_start, False, True)
-
-
-            if index==self.row_nrs.index(x_start.y):
-                break
-            if self.row_nrs.index(x_goal.y) > self.row_nrs.index(x_start.y):
-                index-=1
-            else:
-                index+=1
-
-
-        # if dist>self.step_len: #left edge end
-        #     dist = self.FindCostInfo(self.row_edges[self.row_nrs.index(x_goal.y)][0], x_goal.y, x_start.x, x_start.y, x_start.infopath, False, True)
-        #     xpoint=self.row_edges[self.row_nrs.index(x_goal.y)][0]
-        #     ypoint=x_goal.y
-        # if dist>self.step_len: # right edge end
-        #     dist = self.FindCostInfo(self.row_edges[self.row_nrs.index(x_goal.y)][1], x_goal.y, x_start.x, x_start.y, x_start.infopath, False, True)
-        #     xpoint=self.row_edges[self.row_nrs.index(x_goal.y)][1]
-        #     ypoint=x_goal.y
-        # if dist>self.step_len: # left edge start
-        #     dist = self.FindCostInfo(self.row_edges[self.row_nrs.index(x_start.y)][0], x_start.y, x_start.x, x_start.y, x_start.infopath, False, True)
-        #     xpoint=self.row_edges[self.row_nrs.index(x_start.y)][0]
-        #     ypoint=x_start.y
-        # if dist>self.step_len: # right edge start
-        #     dist = self.FindCostInfo(self.row_edges[self.row_nrs.index(x_start.y)][1], x_start.y, x_start.x, x_start.y, x_start.infopath, False, True)
-        #     xpoint=self.row_edges[self.row_nrs.index(x_start.y)][1]
-        #     ypoint=x_start.y
-        if dist>maxdist:
-            xpoint=random.choice([x_start.x-maxdist,x_start.x+maxdist])
-            ypoint=x_start.y
-            dist=maxdist
-            print("last resort sampling: in own row")
-        #node_new.parent = x_start
-        #print("WE NEED TO SAMPLE CLOSER TO THE NEAREST: ("+str(x_start.x)+","+str(x_start.y)+")")
-        #print("x_nearest=("+str(x_start.x)+","+str(x_start.y)+")")
-        #print("x_rand=("+str(x_goal.x)+","+str(x_goal.y)+") - dist = "+str(dist)+" - x_new=("+str(xpoint)+","+str(ypoint)+")")
-        print("nearest=("+str(x_start.x)+","+str(x_start.y)+") - x_rand=("+str(x_goal.x)+","+str(x_goal.y)+") - dist = "+str(dist)+" - x_new=("+str(xpoint)+","+str(ypoint)+")")
-
-        return Node((int(xpoint),int(ypoint)))
 
     def SteerAstar(self, x_nearest, x_rand):
         dist = self.FindCostInfoA(x_rand.x,x_rand.y,x_nearest.x,x_nearest.y,x_nearest,False,True)
@@ -1750,16 +1503,15 @@ class IRrtStar:
             print("nearest=(" + str(x_nearest.x) + "," + str(x_nearest.y) + ") - x_rand=(" + str(x_rand.x) + "," + str(
                 x_rand.y) + ") - dist = " + str(dist) + " - x_new=(" + str(x_rand.x) + "," + str(
                 x_rand.y) + ")")
-            # return x_goal
             return Node((int(x_rand.x), int(x_rand.y)))
 
         # if dist > self.steplen: use the astar path to find node closer by
         # if no constraints/ ranger/ limit/ reedsshepprev: this can also be within a row
         start = [x_nearest.x,x_nearest.y]
         end = [x_rand.x, x_rand.y]
-        [infopath, cost] = self.search(self.maze, self.edgemaze, start, end)
+        [infopath, cost] = self.search(start, end)
 
-        for i in range(len(infopath) - 1):
+        for i in range(len(infopath)):
             # TODO decide whether it's allowed to sample a vertex
             # boolvertex = False
             # for vertex in self.field_vertex:
@@ -1786,7 +1538,6 @@ class IRrtStar:
                         return Node((int(xpoint), int(ypoint)))
             # sampling the Astar points:
             dist = self.FindCostInfoA(xpoint,ypoint,x_nearest.x,x_nearest.y,x_nearest,False,True)
-            print(dist)
             if dist <= self.step_len:
                 print("nearest=(" + str(x_nearest.x) + "," + str(x_nearest.y) + ") - x_rand=(" + str(x_rand.x) + "," + str(
                     x_rand.y) + ") - dist = " + str(dist) + " - x_new=(" + str(xpoint) + "," + str(
@@ -1794,6 +1545,9 @@ class IRrtStar:
 
                 return Node((int(xpoint), int(ypoint)))
             print("no point close enough found, current dist = "+str(dist))
+            print("nearest=(" + str(x_nearest.x) + "," + str(x_nearest.y) + ") - x_rand=(" + str(x_rand.x) + "," + str(
+                x_rand.y) + ") - dist = " + str(dist) + " - x_new=(" + str(x_rand.x) + "," + str(
+                x_rand.y) + ")")
             return Node((int(x_rand.x),int(x_rand.y)))
 
 
@@ -1816,7 +1570,6 @@ class IRrtStar:
             print("nearest=(" + str(x_start.x) + "," + str(x_start.y) + ") - x_rand=(" + str(x_goal.x) + "," + str(
                 x_goal.y) + ") - dist = " + str(dist) + " - x_new=(" + str(x_goal.x) + "," + str(
                 x_goal.y) + ")")
-            #return x_goal
             return Node((int(x_goal.x), int(x_goal.y)))
         distleft = self.FindCostInfoA(self.row_edges[self.row_nrs.index(x_goal.y)][0], self.row_nrs[self.row_nrs.index(x_goal.y)], x_start.x, x_start.y,
                                      x_start, False, True)
@@ -1924,8 +1677,7 @@ class IRrtStar:
                 nodelist_new.remove(nd)
         #actual calculation
         dist_table = [self.FindCostInfoA(node.x, node.y, nd.x, nd.y, nd, False, True) for nd in nodelist]
-        X_near = [nodelist[ind] for ind in range(len(dist_table)) if (dist_table[ind] <= max_dist and dist_table[ind] > 0.0
-                                                      and not self.utils.is_collision(nodelist[ind], node)==True)]
+        X_near = [nodelist[ind] for ind in range(len(dist_table)) if (dist_table[ind] <= max_dist and dist_table[ind] > 0.0)]
         #print("number of near nodes: "+str(len(X_near)))
         timeend = time.time()
         self.time[3] += (timeend - timestart)
@@ -1939,28 +1691,6 @@ class IRrtStar:
             return self.Near(nodelist,node,max_dist-1)
         return X_near
 
-    #def Sample(self, c_max, c_min, x_center, C):
-    def Sample(self):
-
-        # c_max=np.inf
-        # if c_max < np.inf:
-        #     print("not random sampling")
-        #     r = [c_max / 2.0,
-        #          math.sqrt(c_max ** 2 - c_min ** 2) / 2.0,
-        #          math.sqrt(c_max ** 2 - c_min ** 2) / 2.0]
-        #     L = np.diag(r)
-        #
-        #     while True:
-        #         x_ball = self.SampleUnitBall()
-        #         #x_rand = np.dot(np.dot(C, L), x_ball) + x_center
-        #         if self.x_range[0] + self.delta <= x_rand[0] <= self.x_range[1] - self.delta and \
-        #                 self.y_range[0] + self.delta <= x_rand[1] <= self.y_range[1] - self.delta:
-        #             break
-        #     x_rand = Node((x_rand[(0, 0)], x_rand[(1, 0)]))
-        # else:
-        #     x_rand = self.SampleFreeSpace()
-        x_rand = self.SampleFreeSpace()
-        return x_rand
 
     @staticmethod
     def SampleUnitBall():
@@ -1979,13 +1709,27 @@ class IRrtStar:
         # to visualize radius of infopath
         curnode = node
         currentinfopath = []
-        currentinfopath.extend((self.infopathmatrix[self.x_goal.y * 100 + self.x_goal.x, node.y * 100 + node.x])[::-1])
+        if self.kinematic!="dubins" and self.kinematic!="reedsshepp":
+            currentinfopath.extend((self.infopathmatrix[node.y * 100 + node.x, self.x_goal.y * 100 + self.x_goal.x])[::-1])
+        else:
+            start = [node.x, node.y]
+            end = [self.x_goal.x, self.x_goal.y]
+            [infoastar, costastar] = self.search(start, end)  # A star steps
+            currentinfopath.extend(
+                self.getInfopath(self.x_goal.x, self.x_goal.y, node.x, node.y, node,infoastar)[0])
 
         while curnode.parent:
             # print("index 1 = " + str(curnode.parent.y*100+curnode.parent.x) + " index 2 = " + str(
             #    curnode.y*100+curnode.x))
-            currentinfopath.extend((
-                self.infopathmatrix[curnode.parent.y * 100 + curnode.parent.x, curnode.y * 100 + curnode.x])[::-1])
+            if self.kinematic!="dubins" and self.kinematic!="reedsshepp":
+                currentinfopath.extend((
+                    self.infopathmatrix[curnode.parent.y * 100 + curnode.parent.x, curnode.y * 100 + curnode.x])[::-1])
+            else:
+                start = [curnode.parent.x, curnode.parent.y]
+                end = [curnode.x, curnode.y]
+                [infoastar, costastar] = self.search(start, end)  # A star steps
+                currentinfopath.extend((
+                    self.getInfopath(curnode.x, curnode.y, curnode.parent.x, curnode.parent.y, curnode.parent,infoastar)[0])[::-1])
             curnode = curnode.parent
 
         if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="reedsshepprev":
@@ -1993,7 +1737,7 @@ class IRrtStar:
             infopath=[]
             start = [node.x, node.y]
             end = [self.x_goal.x, self.x_goal.y]
-            [infopathastar, cost] = self.search(self.maze, self.edgemaze, start, end)
+            [infopathastar, cost] = self.search(start, end)
             if node.parent!=None:
                 prevnode=[node.parent.x,node.parent.y]
             else:
@@ -2022,7 +1766,7 @@ class IRrtStar:
                 end = [node.x, node.y]
                 # end = [node_start_x+20,node_start_y]
                 # print(start +end)
-                [infopathastar, cost] = self.search(self.maze, self.edgemaze, start, end)
+                [infopathastar, cost] = self.search(start, end)
                 if node.parent.parent!=None:
                     prevnode=[node.parent.parent.x,node.parent.parent.y]
                 else:
@@ -2050,7 +1794,7 @@ class IRrtStar:
             path=[]
             start  = [node.x,node.y]
             end= [self.x_goal.x,self.x_goal.y]
-            [infopath, cost] = self.search(self.maze, self.edgemaze, start, end)
+            [infopath, cost] = self.search(start, end)
             path.extend(infopath[::-1])
             while node.parent:
                 start = [node.parent.x, node.parent.y]
@@ -2058,7 +1802,7 @@ class IRrtStar:
                 # end = [node_start_x+20,node_start_y]
                 # print(start +end)
 
-                [infopath, cost] = self.search(self.maze, self.edgemaze, start, end)
+                [infopath, cost] = self.search(start, end)
                 path.extend(infopath[::-1])
                 node=node.parent
         # to extract the path
@@ -2074,12 +1818,7 @@ class IRrtStar:
         #return path
         return path,currentinfopath
 
-    def InGoalRegion(self, node):
-        #if self.Line(node, self.x_goal) < self.step_len:
-        if node.cost+self.FindCostInfoA(self.x_goal.x, self.x_goal.y, node.x, node.y, node, False, True) <= self.budget:
-            return True
 
-        return False
 
     @staticmethod
     def RotationToWorldFrame(x_start, x_goal, L):
@@ -2306,15 +2045,15 @@ class IRrtStar:
 
 
 
-def main(uncertaintymatrix,row_nrs,row_edges,field_vertex,scenario):
+def main(uncertaintymatrix,row_nrs,row_edges,field_vertex,scenario,costmatrix=None):
     x_start = (50, 48)  # Starting node
     #x_goal = (37, 18)  # Goal node
     x_goal = (50,48)
 
-    rrt_star = IRrtStar(x_start, x_goal, 100, 0.0, 15, 2000,uncertaintymatrix,row_nrs,row_edges,field_vertex,scenario)
-    [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration]=rrt_star.planning()
+    rrt_star = IRrtStar(x_start, x_goal, 100, 0.0, 15, 2000,uncertaintymatrix,row_nrs,row_edges,field_vertex,scenario,costmatrix)
+    [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,costmatrix]=rrt_star.planning()
 
-    return finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration
+    return finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration, costmatrix
 
 
 if __name__ == '__main__':

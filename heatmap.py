@@ -56,14 +56,17 @@ def withrows(matrix,plantdist,rowdist,field_vertex,show=True):
         edgematrix[rows,left]=0.5
         edgematrix[rows,right]=0.5
         row_edges.append([left,right])
-    print(row_nrs)
+    # for index,row in enumerate(row_nrs):
+    #     print(row,row_edges[index])
     print(field_vertex)
     field_vertex_new=[]
     for vertex in field_vertex:
         temp_vertex=[vertex[0],vertex[1]]
         for index,row in enumerate(row_nrs):
             if vertex[1]<row: # so going from bottom up, passing the vertex
-                if index==0: # all the way at the bottom
+                if vertex[1]==row_nrs[index-1]:
+                    temp_vertex.append([index-1,index-1]) # lies on a row
+                elif index==0: # all the way at the bottom
                     temp_vertex.append([-1,index])
                 else:
                     temp_vertex.append([index-1,index]) # vertex lies between these indexes
