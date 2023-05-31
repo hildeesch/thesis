@@ -43,11 +43,25 @@ def print_hi(name):
     pathogenbool = True # for weed, set to False
     if pathogenbool:
         # Configure the spreading characteristics of the pathogen
+        # more aggressive
+        pathogen1 = Pathogen(patchnr=3,infectionduration=4,spreadrange=5, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.3, saturation=5)
+        # two patches
         pathogen1 = Pathogen(patchnr=2,infectionduration=4,spreadrange=3, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.3, saturation=5)
+        # one patch:
         #pathogen1 = Pathogen(patchnr=1,infectionduration=6,spreadrange=6, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.1, saturation=3) # one big patch
+        # Start with no info (i.e., blank world_model):
+        # worldmodel_matrix = deepcopy(field_matrix)
+        # worldmodel_matrix[worldmodel_matrix == 0.5] = 0.001
+        # show_map(worldmodel_matrix)
+
         spread_matrix, worldmodel_matrix, uncertainty_matrix = pathogenspread(field_matrix,plant_matrix,pathogen1, False)
     else:
         weed1 = Weed(patchnr=4,patchsize=7,spreadrange=3,reproductionrate=2,standarddeviation=1, saturation=1,plantattach=False)
+        # # Start with no info:
+        # worldmodel_matrix = deepcopy(field_matrix)
+        # worldmodel_matrix[worldmodel_matrix == 0.5] = 0.001
+        # # show_map(worldmodel_matrix)
+
         spread_matrix,worldmodel_matrix, uncertainty_matrix = weedsspread(field_matrix,plant_matrix,weed1, True)
     #del plant_matrix
     #del spread_matrix #to save memory
@@ -64,6 +78,8 @@ def print_hi(name):
     #(uncertainty_matrix[:,0:50])[uncertainty_matrix[:,0:50]==0]=0.5
 
     #show_map(uncertainty_matrix)
+
+
     print(np.nansum(uncertainty_matrix))
     scenario = 1
     #rig(uncertainty_matrix)

@@ -56,15 +56,14 @@ def showpathlong(day,total_days,fig,ax,uncertaintymatrix, path, cost, info,budge
     colormap = cm.Blues
     colormap.set_bad(color='black')
     im = ax[i,j].imshow(uncertaintymatrix, colormap, vmin=0, vmax=1, origin='lower')
-    divider = make_axes_locatable(ax[i,j])
-    cax = divider.append_axes("right", size="5%", pad=0.05)
-    plt.colorbar(im, cax=cax)
-    # ax.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
+    #divider = make_axes_locatable(ax[i,j])
+    #cax = divider.append_axes("right", size="5%", pad=0.05)
+    #plt.colorbar(im, cax=cax)
     ax[i,j].plot([x for x, _ in path], [y for _, y in path], '-r')
 
     # ax.plot([x for x, _ in x_best.infopath], [y for _, y in x_best.infopath], '-r')
     # ax.plot([x for x, _ in x_best.lastinfopath], [y for _, y in x_best.lastinfopath], '-r')
-    ax[i,j].set_title("Path on day "+str(day)+"\nCost: "+str(round(cost))+" Info: "+str(round(info))+" \nSum entropy: "+str(round(np.nansum(uncertaintymatrix))),fontsize=10)
+    ax[i,j].set_title("Path on day "+str(day)+"\nCost: "+str(round(cost))+" Info: "+str(round(info))+" \nSum entropy: "+str(round(np.nansum(uncertaintymatrix))),fontsize=4)
     #plt.title("Final path in entropy heatmap")
     #plt.suptitle("Cost: "+str(cost)+" Info: "+str(info)+" Sum entropy: "+str(np.nansum(uncertaintymatrix)))
     if day==total_days:
@@ -88,7 +87,7 @@ def updatematrix(disease,plantmatrix,spreadmatrix,worldmodel,uncertaintymatrix,i
     # worldmodel = spreadmatrix that we know of
     # sensoruncertainty = uncertainty in monitoring, value between 0 (= no uncertainty) and 1 (monitoring gives no info at all)
     #   this uncertainty represents the standard deviation (STD) relative to the actual value
-    dailyuncertainty=0.00 # how much the uncertainty rises (across the entire matrix) each day
+    dailyuncertainty=0.01 # how much the uncertainty rises (across the entire matrix) each day
 
     uncertaintymatrixnew = deepcopy(uncertaintymatrix)
     worldmodelnew= deepcopy(worldmodel)

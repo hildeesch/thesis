@@ -112,7 +112,7 @@ class IRrtStar:
         self.infopath_right = np.empty((len(self.row_nrs),len(self.row_nrs)),dtype = object )
         self.info_left = np.zeros((len(self.row_nrs),len(self.row_nrs)))
         self.info_right = np.zeros((len(self.row_nrs),len(self.row_nrs)))
-        if costmatrix == None:
+        if costmatrix is None:
             self.costmatrix = np.empty((100*100,100*100) )
         else:
             self.costmatrix = costmatrix
@@ -311,6 +311,20 @@ class IRrtStar:
                     # self.x_best = max(info, key=info.get)
                     # print("Best node after rewiring: tot. info: "+str(x_best.totalinfo)+" Cost: "+str(x_best.totalcost))
 
+        # Rewiring in Hinsight:
+        info = {node: node.totalinfo for node in self.X_soln}
+        for i in range(10):  # rewire the 10 best nodes
+            # self.x_best = max(info, key=info.get)
+            curnode = sorted(info, key=info.get)[-(i + 1)]
+            self.Rewiring_afterv2(curnode)
+        # self.Rewiring_after(self.x_best)
+        info = {node: node.totalinfo for node in self.X_soln}
+        self.x_best = max(info, key=info.get)
+        x_best = max(info, key=info.get)
+        print(
+            "Best node after rewiring: tot. info: " + str(x_best.totalinfo) + " Cost: " + str(x_best.totalcost))
+
+        # Extracting the final path (best path)
         #self.path = self.ExtractPath(x_best)
         [self.path,infopathradius] = self.ExtractPath(x_best)
         print(infopathradius)
@@ -993,7 +1007,8 @@ class IRrtStar:
 
                 infopath.extend(self.FindInfo(infopathastar[i + 1][0], infopathastar[i + 1][1], infopathastar[i][0],
                                               infopathastar[i][1], None, dcost, False)[0])
-            self.anglematrix[node_start_y * 100 + node_start_x,node_end_y * 100 + node_end_x] = curangle # last angle of the piece
+            if self.kinematic!="none":
+                self.anglematrix[node_start_y * 100 + node_start_x,node_end_y * 100 + node_end_x] = curangle # last angle of the piece
         if self.kinematic == "dubins" or self.kinematic == "reedsshepp" or self.kinematic == "reedsshepprev":
             cost = 0
             #infopathastar = infopath
@@ -1268,90 +1283,93 @@ class IRrtStar:
             print("Best index: "+str(bestindex))
             print(node.parent.parent.x, node.parent.parent.y)
 
-            #for x_near in self.Near(self.V, node, self.search_radius):
-            for x_near in self.Near(self.V, node, 10):
-                x_temp = Node((node.x, node.y))
-                x_temp.parent = node.parent
-                x_temp.info = node.info
-                x_temp.cost = node.cost
-                x_temp.totalinfo = node.totalinfo
-                x_temp.totalcost = node.totalcost
+            checked_locations = []
+            for x_near in self.Near(self.V, node, self.search_radius):
+                # for x_near in self.Near(self.V, node, 10):
+                if not (x_near.x == node.x and x_near.y == node.y) and not ([x_near.x, x_near.y] in checked_locations):
+                    checked_locations.append([x_near.x, x_near.y])
+                    x_temp = Node((node.x, node.y))
+                    x_temp.parent = node.parent
+                    x_temp.info = node.info
+                    x_temp.cost = node.cost
+                    x_temp.totalinfo = node.totalinfo
+                    x_temp.totalcost = node.totalcost
 
-                #if node.parent != self.x_start and node != self.x_start:  # because otherwise there's no "old" path to go back to
-                c_old = node.cost
+                    #if node.parent != self.x_start and node != self.x_start:  # because otherwise there's no "old" path to go back to
+                    c_old = node.cost
 
-                # c_new = node.parent.parent.cost + self.Line(node.parent.parent, x_near) + self.Line(node,
-                #                                                                                        x_near)
-                [cost, info] = self.FindCostInfoA(node.parent.parent.x, node.parent.parent.y, x_near.x, x_near.y, node.parent.parent, True)
-                cost2 = self.FindCostInfoA(x_near.x, x_near.y, node.x, node.y, node.parent.parent, True,True)
-                c_new = node.parent.parent.cost + cost + cost2
+                    # c_new = node.parent.parent.cost + self.Line(node.parent.parent, x_near) + self.Line(node,
+                    #                                                                                        x_near)
+                    [cost, info] = self.FindCostInfoA(node.parent.parent.x, node.parent.parent.y, x_near.x, x_near.y, node.parent.parent, True)
+                    cost2 = self.FindCostInfoA(x_near.x, x_near.y, node.x, node.y, node.parent.parent, True,True)
+                    c_new = node.parent.parent.cost + cost + cost2
 
-                # if x_new.parent.x==x_near.x and x_new.parent.y==x_near.y:
-                #     return # if the parent of x_new = x_near, we don't want to make the parent of x_near = x_new (because then we create a loose segment
-                if (c_new-c_old) < (self.budget-best_node.totalcost): # still within budget
-                    newnode = Node((x_near.x, x_near.y))
-                    newnode.parent = node.parent.parent
-                    addnew = True
-                    # for node in self.V[::-1]: # to prevent adding doubles
-                    #     if node.parent==newnode.parent and node.x==newnode.x and node.y==newnode.y:
-                    #         newnode=node
-                    #         addnew = False
-                    #         break
-                    if addnew:
-                        newnode.info = node.parent.parent.info + info
-                        newnode.cost = node.parent.parent.cost + cost
-                        self.LastPath(newnode)
-                    info = newnode.info + self.FindCostInfoA(newnode.x, newnode.y, node.x, node.y, newnode, True)[1]
-
-
-                    info_old = node.info
-
-                    info_new = info
-                    if info_new >= info_old:  # note: this is different than the condition in pruning
+                    # if x_new.parent.x==x_near.x and x_new.parent.y==x_near.y:
+                    #     return # if the parent of x_new = x_near, we don't want to make the parent of x_near = x_new (because then we create a loose segment
+                    if (c_new-c_old) < (self.budget-best_node.totalcost): # still within budget
+                        newnode = Node((x_near.x, x_near.y))
+                        newnode.parent = node.parent.parent
+                        addnew = True
+                        # for node in self.V[::-1]: # to prevent adding doubles
+                        #     if node.parent==newnode.parent and node.x==newnode.x and node.y==newnode.y:
+                        #         newnode=node
+                        #         addnew = False
+                        #         break
                         if addnew:
-                            self.V.append(newnode)
-
-                        # rewiring:
-
-                        node.parent = newnode
-                        node.info = info_new
-                        node.cost = c_new
-                        self.LastPath(node)  # also recalculate the last info part
+                            newnode.info = node.parent.parent.info + info
+                            newnode.cost = node.parent.parent.cost + cost
+                            self.LastPath(newnode)
+                        info = newnode.info + self.FindCostInfoA(newnode.x, newnode.y, node.x, node.y, newnode, True)[1]
 
 
-                        # Scenario 1:
-                        # else:
-                        self.Recalculate(node,
-                                         None)  # recalculates the cost and info for nodes further down the path
-                        if totalinfo>=best_node.totalinfo:
-                            # reverse rewiring
-                            node.parent = x_temp.parent
-                            node.info = x_temp.info
-                            node.cost = x_temp.cost
-                            node.totalinfo = x_temp.totalinfo
-                            node.totalcost = x_temp.totalcost
-                            self.Recalculate(node,None)
+                        info_old = node.info
+
+                        info_new = info
+                        if info_new >= info_old:  # note: this is different than the condition in pruning
+                            if addnew:
+                                self.V.append(newnode)
+
+                            # rewiring:
+
+                            node.parent = newnode
+                            node.info = info_new
+                            node.cost = c_new
+                            self.LastPath(node)  # also recalculate the last info part
+
+
+                            # Scenario 1:
+                            # else:
+                            self.Recalculate(node,
+                                             None)  # recalculates the cost and info for nodes further down the path
+                            if totalinfo>=best_node.totalinfo:
+                                # reverse rewiring
+                                node.parent = x_temp.parent
+                                node.info = x_temp.info
+                                node.cost = x_temp.cost
+                                node.totalinfo = x_temp.totalinfo
+                                node.totalcost = x_temp.totalcost
+                                self.Recalculate(node,None)
+                            else:
+                                bestpath[bestindex + 1] = newnode
+
+                                print("Improved path through hindsight rewiring with increase in info: "+str(best_node.totalinfo-totalinfo))
+                                totalinfo=best_node.totalinfo
+                            # # bit of debugging:
+                            # thisnode=x_new
+                            # while thisnode.parent:
+                            #     thisnode=thisnode.parent
+                            # if not (thisnode.x==self.x_start.x and thisnode.y==self.x_start.y):
+                            #     print("WARNING WARNING WARNING LOOSE END LOOSE END LOOSE END LOOSE END LOOSE END LOOSE END AT X_NEAR = ("+str(x_near.x)+","+str(x_near.y)+")")
+
+                            # x_near.infopath = infopath
+                            # print("Rewiring took place!!")
                         else:
-                            bestpath[bestindex + 1] = newnode
-
-                            print("Improved path through hindsight rewiring with increase in info: "+str(best_node.totalinfo-totalinfo))
-                            totalinfo=best_node.totalinfo
-                        # # bit of debugging:
-                        # thisnode=x_new
-                        # while thisnode.parent:
-                        #     thisnode=thisnode.parent
-                        # if not (thisnode.x==self.x_start.x and thisnode.y==self.x_start.y):
-                        #     print("WARNING WARNING WARNING LOOSE END LOOSE END LOOSE END LOOSE END LOOSE END LOOSE END AT X_NEAR = ("+str(x_near.x)+","+str(x_near.y)+")")
-
-                        # x_near.infopath = infopath
-                        # print("Rewiring took place!!")
-                    else:
-                        del newnode
-                # else:
+                            del newnode
+                    # else:
+                    #     notfinished=False
+                # i+=1
+                # if i==len(bestpath):
                 #     notfinished=False
-            # i+=1
-            # if i==len(bestpath):
-            #     notfinished=False
         print("End rewiring after v2")
         print(" Info: " + str(best_node.info) + " Tot. info: " + str(
             best_node.totalinfo) + " Cost: " + str(best_node.totalcost))
@@ -1544,11 +1562,11 @@ class IRrtStar:
                     ypoint) + ")")
 
                 return Node((int(xpoint), int(ypoint)))
-            print("no point close enough found, current dist = "+str(dist))
-            print("nearest=(" + str(x_nearest.x) + "," + str(x_nearest.y) + ") - x_rand=(" + str(x_rand.x) + "," + str(
-                x_rand.y) + ") - dist = " + str(dist) + " - x_new=(" + str(x_rand.x) + "," + str(
-                x_rand.y) + ")")
-            return Node((int(x_rand.x),int(x_rand.y)))
+        print("no point close enough found, current dist = "+str(dist))
+        print("nearest=(" + str(x_nearest.x) + "," + str(x_nearest.y) + ") - x_rand=(" + str(x_rand.x) + "," + str(
+            x_rand.y) + ") - dist = " + str(dist) + " - x_new=(" + str(x_rand.x) + "," + str(
+            x_rand.y) + ")")
+        return Node((int(x_rand.x),int(x_rand.y)))
 
 
     def Steer_section(self, x_start, x_goal): # with sectioning
