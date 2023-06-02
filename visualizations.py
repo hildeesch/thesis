@@ -5,6 +5,9 @@ from matplotlib import cm
 import matplotlib.pyplot as plt
 import math
 
+from Planner.Sampling_based_Planning.rrt_2D import dubins_path as dubins
+
+
 from copy import deepcopy
 from shapely.geometry import Point, Polygon
 
@@ -36,33 +39,44 @@ def onkey(event):
     print("You pressed: "+str(event.key))
     if event.key=="r":
         color=str(color[0]+"r")
-    elif event.key=="k":
+        print("Color red")
+    elif event.key=="n":
         color=str(color[0]+"k")
+        print("Color black")
     elif event.key=="b":
         color=str(color[0]+"b")
+        print("Color blue")
     elif event.key=="v":
         color=str(color[0]+"g")
+        print("Color green")
     elif event.key=="w":
         color=str(color[0]+"w")
+        print("Color white (eraser)")
     elif event.key=="d":
-        color=str("--"+color[1])
+        print("Dotted line")
+        color=str("--"+color[-1])
     elif event.key=="z":
+        print("Reset")
         color="-b"
         draw="line"
     elif event.key=="a":
         draw="angle"
-        print(draw)
+        print("Angle")
+    elif event.key=="c":
+        draw="curve"
+        print("Curve")
     elif event.key=="i":
         draw="line"
-        print("line")
+        print("Line")
     elif event.key=="j":
         draw="line_nonode"
+        print("Line without nodes")
     elif event.key=="g": # happens automatically
         print("Changing grid style")
     elif event.key=="q": # happens automatically
         print("Quit plot")
     else:
-        print("No recognized option. Options: 'b' for blue, 'k' for black, 'w' for white, 'v' for green, 'r' for red, 'd' for dotted, 'z' for reset, \n'a' for angle, 'i' for line, 'j' for line without nodes, or 'g' to change gridstyle")
+        print("No recognized option. Options: 'b' for blue, 'n' for black, 'w' for white, 'v' for green, 'r' for red, 'd' for dotted, 'z' for reset, \n'a' for angle, 'c' for curve, 'i' for line, 'j' for line without nodes, or 'g' to change gridstyle")
 
 
 
@@ -86,7 +100,48 @@ def drawAngle(center, point1, point2):
 
     plt.show()
 
+def onclick_curve(event):
+    global linepoints
+    # print(linepoints)
 
+    # print(linepoints)
+
+    x = event.xdata
+    y = event.ydata
+    linepoints = np.append(linepoints, round(x))
+    linepoints = np.append(linepoints, round(y))
+
+    if np.size(linepoints) == 4:
+        sx = linepoints[0]
+        sy = linepoints[1]
+        gx = linepoints[2]
+        gy = linepoints[3]
+        maxc=1
+        syaw=np.random.choice([0,math.pi/2,math.pi,3*math.pi/2])
+        gyaw=np.random.choice([0,math.pi/2,math.pi,3*math.pi/2])
+
+        dubinsmat=[]
+
+        [dubinspath, dubinsmat, infopathrel] = dubins.calc_dubins_path(sx, sy, syaw, gx, gy, gyaw, maxc,
+                                                                            dubinsmat)
+        dubins_rel_x = dubinspath.x
+        dubins_rel_y = dubinspath.y
+        dubins_x = [x + sx for x in dubins_rel_x]
+        dubins_y = [y + sy for y in dubins_rel_y]
+        if color[-1] == "w":
+            linewidth = 3
+        else:
+            linewidth = 1.5
+
+        for index in range(1,len(dubins_x)):
+            #print(len(color))
+            ax.plot([dubins_x[index-1], dubins_x[index]], [dubins_y[index-1], dubins_y[index]], color, linewidth=linewidth)
+
+        ax.plot(linepoints[0], linepoints[1], "-k", marker="o", markersize=5)
+        ax.plot(linepoints[2], linepoints[3], "-k", marker="o", markersize=5)
+
+        linepoints = np.array([])
+        plt.show()
 def onclick_angle(event):
     global color
     #print("enter onclick")
@@ -111,6 +166,8 @@ def onclick(event):
     global draw
     if draw=="angle":
         onclick_angle(event)
+    elif draw=="curve":
+        onclick_curve(event)
     #global color
     #print("enter onclick")
     #print(event.button)
@@ -135,11 +192,16 @@ def onclick(event):
             #print(linepoints[1])
             #print(linepoints[2])
             #print(linepoints[3])
-            if color[1]=="w":
+            if color[-1]=="w":
                 linewidth=3
             else:
                 linewidth=1.5
-            ax.plot([linepoints[0],linepoints[2]],[linepoints[1],linepoints[3]],color,linewidth=linewidth)
+            if len(color)==2 and color[-1]!="w" and draw!="line_nonode":
+                print("arrow")
+                ax.arrow(linepoints[0],linepoints[1],(linepoints[2]-linepoints[0]),(linepoints[3]-linepoints[1]),color=color[-1],linewidth=linewidth,head_width=0.22,length_includes_head=True)
+            else:
+                print(len(color))
+                ax.plot([linepoints[0],linepoints[2]],[linepoints[1],linepoints[3]],color,linewidth=linewidth)
             if draw=="line":
                 ax.plot(linepoints[0],linepoints[1], "-k", marker="o",markersize=5)
                 ax.plot(linepoints[2],linepoints[3], "-k", marker="o",markersize=5)
@@ -149,6 +211,7 @@ def onclick(event):
 
 
 def interactivePlot():
+    print("Options: 'b' for blue, 'n' for black, 'w' for white, 'v' for green, 'r' for red, 'd' for dotted, 'z' for reset, \n'a' for angle, 'c' for curve, 'i' for line, 'j' for line without nodes, or 'g' to change gridstyle")
 
     cid=fig.canvas.mpl_connect('button_press_event',onclick)
 

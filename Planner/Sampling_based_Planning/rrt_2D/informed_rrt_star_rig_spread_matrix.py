@@ -54,7 +54,7 @@ class IRrtStar:
         self.plotting = plotting.Plotting(x_start, x_goal)
         self.utils = utils.Utils(uncertaintymatrix)
 
-        #self.fig, self.ax = plt.subplots()
+        self.fig, self.ax = plt.subplots()
         self.delta = self.utils.delta
         self.x_range = self.env.x_range
         self.y_range = self.env.y_range
@@ -118,144 +118,171 @@ class IRrtStar:
         return x_best
 
     def planning(self):
-        show = False
+        show = True
         #theta, dist, x_center, C, x_best = self.init()
+        totalstarttime=time.time()
+
         self.x_best = self.init()
         x_best = self.init()
         c_best = np.inf
-        count_down=20
         i_best = 0.001
-        totalstarttime=time.time()
-        startlen=0 # for checking node increase
 
-        k_list=[]
-        i_list=[]
-        k=0
-        while k<self.iter_max:
-            k+=1
-            #time.sleep(0.1)
-            if k>=100-3: #only evaluate from when we might want it to stop #TODO make 400 a variable
-                cost = {node: node.totalcost for node in self.X_soln}
-                info = {node: node.totalinfo for node in self.X_soln}
-                #x_best = min(cost, key=cost.get)
-                if len(info)>0:
-                    self.x_best = max(info, key=info.get)
-                    x_best = max(info, key=info.get)
-                    #c_best = cost[x_best]
-                    i_last_best = i_best
-                    i_best = info[x_best]
+        # doubleroundstrategy:
+        for day in range(2):
+            self.day=day
+            if day==1:
+                self.V_prev = self.V # do we still need this later?
+                self.X_soln_prev = self.X_soln
+                self.V = []
+                self.X_soln = set()
+                self.budget = self.budget*2 # double the budget now
+                self.iter_max=51 # adapt the max number of iterations
+                self.reduction=0 # reset
+                self.reductioncount=0 # reset
+                # for every node of the previous day that was a feasible solution (so in x_soln) we create a new node with this node as parent at the charging station (= endgoal)
+                for node in self.X_soln_prev:
+                    node_new = Node((self.x_start.x, self.x_start.y))
+                    node_new.parent = node  # added
+                    node_new.cost = node.totalcost
+                    node_new.info = node.totalinfo
+                    node_new.totalcost = node.totalcost # same as cost since it is at the starting point already
+                    node_new.totalinfo = node.totalinfo # again the same as info
+                    self.V.append(node_new)
+                    self.X_soln.add(node_new)
 
-                    k_list.append(k)
-                    i_list.append(i_best)
-                    #print("i_best: "+str(i_best)+" i_last_best: "+str(i_last_best)+" Criterion value: "+str(((i_best-i_last_best)*100/i_last_best)))
-                    if ((i_best-i_last_best)/i_last_best)<0.001: #smaller than 1% improvement
-                        count_down-=1
-                    else:
-                        count_down=20 #reset
-                        print("reset countdown")
-            if k==201: # to test up to certain iteration
-                count_down=0
-            if count_down<=0 and (k>200 or k>self.iter_max-3):
-                print("Reached stopping criterion at iteration "+str(k))
-                break # we stop iterating if the best score is not improving much anymore and we already passed at least ... cycles
+            count_down=20
+            startlen=0 # for checking node increase
 
-            if k%50==0:
-                print("ATTENTION!!! ATTENTION!!! ATTENTION!!! AGAIN FIFTY CYCLES FURTHER, CURRENT CYCLE ="+str(k)) # to know how far we are
-            endlen=len(self.V)
-            print("Nr of nodes added: "+str(endlen-startlen))
-            if (endlen-startlen)==0 and not double:
-                k-=1
-            #     print("Len X_Near was: "+str(len(self.Near(self.V,x_new))))
-            startlen = len(self.V)
+            k_list=[]
+            i_list=[]
+            k=0
+            while k<self.iter_max:
+                k+=1
+                #time.sleep(0.1)
+                if k>=50-3: #only evaluate from when we might want it to stop #TODO make 400 a variable
+                    cost = {node: node.totalcost for node in self.X_soln}
+                    info = {node: node.totalinfo for node in self.X_soln}
+                    #x_best = min(cost, key=cost.get)
+                    if len(info)>0:
+                        self.x_best = max(info, key=info.get)
+                        x_best = max(info, key=info.get)
+                        #c_best = cost[x_best]
+                        i_last_best = i_best
+                        i_best = info[x_best]
 
-            timestart=time.time()
-            x_rand = self.SampleFreeSpace()
-            timeend=time.time()
-            self.time[0]+=(timeend-timestart)
-            timestart=time.time()
-            x_nearest = self.Nearest(self.V, x_rand)
-            timeend = time.time()
-            self.time[1] += (timeend - timestart)
-            timestart=time.time()
-            x_new = self.Steer(x_nearest, x_rand) #so that we only generate one new node, not multiple
-            timeend = time.time()
-            self.time[2] += (timeend - timestart)
-            #if self.Cost(x_nearest) + self.Line(x_nearest, x_rand) + self.Line(x_rand, self.x_goal) > self.budget:
-                #just for debugging purposes (for now)
-                #print("Past the budget")
-            double=False
-            for node in self.V:
-                if node.x == x_new.x and node.y == x_new.y:  # co-located nodes
-                    double=True #there is already a node at this location, so we skip it
-                    print("double")
+                        k_list.append(k)
+                        i_list.append(i_best)
+                        #print("i_best: "+str(i_best)+" i_last_best: "+str(i_last_best)+" Criterion value: "+str(((i_best-i_last_best)*100/i_last_best)))
+                        if ((i_best-i_last_best)/i_last_best)<0.001: #smaller than 1% improvement
+                            count_down-=1
+                        else:
+                            count_down=20 #reset
+                            print("reset countdown")
+                if k==101: # to test up to certain iteration
+                    count_down=0
+                if count_down<=0 and (k>100 or k>self.iter_max-3):
+                    print("Reached stopping criterion at iteration "+str(k))
+                    break # we stop iterating if the best score is not improving much anymore and we already passed at least ... cycles
+
+                if k%50==0:
+                    print("ATTENTION!!! ATTENTION!!! ATTENTION!!! AGAIN FIFTY CYCLES FURTHER, CURRENT CYCLE ="+str(k)) # to know how far we are
+                endlen=len(self.V)
+                print("Nr of nodes added: "+str(endlen-startlen))
+                if (endlen-startlen)==0 and not double:
                     k-=1
-                    break
-            #if x_nearest.cost + self.Line(x_nearest, x_new) + self.Line(x_new, self.x_goal) < self.budget and not double:  # budget check for nearest parent (to make it more efficient)
-            if not double:  # budget check for nearest parent (to make it more efficient)
-                # print(x_nearest.cost + self.Line(x_nearest, x_new) + self.Line(x_new, self.x_goal))
-                node_new=[]
-                # if self.scenario!=5:
-                #     for x_near in self.Near(self.V, x_new, self.search_radius):
-                #         timestart = time.time()
-                #         self.Rewiringv2(x_near, x_new)
-                for x_near in self.Near(self.V,x_new):
-                    node_new = Node((x_new.x, x_new.y))
-                    node_new.parent = x_near  # added
+                #     print("Len X_Near was: "+str(len(self.Near(self.V,x_new))))
+                startlen = len(self.V)
 
-                    if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="reedsshepprev":
-                        #[dubinscost,dubinsinfo] = self.dubins(x_near,x_new)
-                        [dubinscost,dubinsinfo,infopath] = self.dubinsnomatrix(x_near,x_new)
-                        c_min = x_near.cost + dubinscost
-                        #endcost = self.dubins(x_new,self.x_goal,True)
-                        [endcost,endangle] = self.dubinsnomatrix(x_new,self.x_goal,True)
-                    else:
-                        #c_min = x_near.cost + self.Line(x_near, x_new)
-                        #endcost = self.Line(x_new, self.x_goal)
-                        c_min = x_near.cost + self.get_distance_and_angle(x_near,node_new)[0]
-                        endcost = self.get_distance_and_angle(node_new,self.x_goal)[0]
+                timestart=time.time()
+                x_rand = self.SampleFreeSpace()
+                timeend=time.time()
+                self.time[0]+=(timeend-timestart)
+                timestart=time.time()
+                x_nearest = self.Nearest(self.V, x_rand)
+                timeend = time.time()
+                self.time[1] += (timeend - timestart)
+                timestart=time.time()
+                x_new = self.Steer(x_nearest, x_rand) #so that we only generate one new node, not multiple
+                timeend = time.time()
+                self.time[2] += (timeend - timestart)
+                #if self.Cost(x_nearest) + self.Line(x_nearest, x_rand) + self.Line(x_rand, self.x_goal) > self.budget:
+                    #just for debugging purposes (for now)
+                    #print("Past the budget")
+                double=False
+                for node in self.V:
+                    if node.x == x_new.x and node.y == x_new.y:  # co-located nodes
+                        double=True #there is already a node at this location, so we skip it
+                        print("double")
+                        k-=1
+                        break
+                #if x_nearest.cost + self.Line(x_nearest, x_new) + self.Line(x_new, self.x_goal) < self.budget and not double:  # budget check for nearest parent (to make it more efficient)
+                if not double:  # budget check for nearest parent (to make it more efficient)
+                    # print(x_nearest.cost + self.Line(x_nearest, x_new) + self.Line(x_new, self.x_goal))
+                    node_new=[]
 
-                    # if c_min+self.Line(x_new, self.x_goal) > self.budget:
-                    #     print("past budget (step 2): "+str(c_min+self.Line(x_new, self.x_goal)))
+                    # doubleroundstrategy:
+                    # if day == 1:
+                    #     print(len(self.Near(self.V, x_new)))
 
-                    node_new.cost = c_min #+self.Line(x_new, self.x_goal)
-                    #node_new.info = self.Info(node_new)
-                    if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="reedsshepprev":
-                        node_new.info = x_near.info+ dubinsinfo
-                    else:
-                        node_new.info = self.Info_cont(node_new)
-                    self.V.append(node_new) #generate a "node"/trajectory to each near point
+                    for x_near in self.Near(self.V,x_new):
+                        node_new = Node((x_new.x, x_new.y))
+                        node_new.parent = x_near  # added
+
+                        if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="reedsshepprev":
+                            #[dubinscost,dubinsinfo] = self.dubins(x_near,x_new)
+                            [dubinscost,dubinsinfo,infopath] = self.dubinsnomatrix(x_near,x_new)
+                            c_min = x_near.cost + dubinscost
+                            #endcost = self.dubins(x_new,self.x_goal,True)
+                            [endcost,endangle] = self.dubinsnomatrix(x_new,self.x_goal,True)
+                        else:
+                            #c_min = x_near.cost + self.Line(x_near, x_new)
+                            #endcost = self.Line(x_new, self.x_goal)
+                            c_min = x_near.cost + self.get_distance_and_angle(x_near,node_new)[0]
+                            endcost = self.get_distance_and_angle(node_new,self.x_goal)[0]
+
+                        # if c_min+self.Line(x_new, self.x_goal) > self.budget:
+                        #     print("past budget (step 2): "+str(c_min+self.Line(x_new, self.x_goal)))
+
+                        node_new.cost = c_min #+self.Line(x_new, self.x_goal)
+                        #node_new.info = self.Info(node_new)
+                        if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="reedsshepprev":
+                            node_new.info = x_near.info+ dubinsinfo
+                        else:
+                            node_new.info = self.Info_cont(node_new)
+                        self.V.append(node_new) #generate a "node"/trajectory to each near point
 
 
-                    timestart = time.time()
-                    self.LastPath(node_new)
-                    timeend = time.time()
-                    self.time[5] += (timeend - timestart)
-                    if node_new.totalcost <= self.budget:  # extra check for budget for actual parent
-                      self.X_soln.add(node_new)
+                        timestart = time.time()
+                        self.LastPath(node_new)
+                        timeend = time.time()
+                        self.time[5] += (timeend - timestart)
+                        if node_new.totalcost <= self.budget:  # extra check for budget for actual parent
+                          self.X_soln.add(node_new)
 
-                #print("node_new: ("+str(node_new.x)+","+str(node_new.y)+")")
-                if node_new!=[]: # so it has actually been assigned
-                    timestart=time.time()
-                    self.Pruning(node_new)
-                    timeend = time.time()
-                    self.time[6] += (timeend - timestart)
+                    #print("node_new: ("+str(node_new.x)+","+str(node_new.y)+")")
+                    if node_new!=[]: # so it has actually been assigned
+                        timestart=time.time()
+                        self.Pruning(node_new)
+                        timeend = time.time()
+                        self.time[6] += (timeend - timestart)
 
-            if k % 50 == 0 and show:
-                self.animation()
-                self.time[7] = time.time()-totalstarttime
-                #print(self.time)
-                if k>0:
-                    print("It.: " + str(k) + " Time: " + str(self.time[7]) + " Info: " + str(x_best.info) + " Tot. info: "+str(x_best.totalinfo) + " Cost: " + str(x_best.cost) + " Totalcost: "+str(x_best.totalcost) +" Nodes: "+str(len(self.V)))
-                    # if k==200:
-                    #     for i in range(10): # rewire the 10 best nodes
-                    #         info = {node: node.totalinfo for node in self.X_soln}
-                    #         #self.x_best = max(info, key=info.get)
-                    #         curnode = sorted(info, key=info.get)[-(i+1)]
-                    #         self.Rewiring_afterv2(curnode)
-                    #     #self.Rewiring_after(self.x_best)
-                    #     info = {node: node.totalinfo for node in self.X_soln}
-                    #     self.x_best = max(info, key=info.get)
-                    #     print("Best node after rewiring: tot. info: "+str(x_best.totalinfo)+" Cost: "+str(x_best.totalcost))
+                if k % 50 == 0:
+                    if show:
+                       self.animation()
+                    self.time[7] = time.time()-totalstarttime
+                    #print(self.time)
+                    if k>0:
+                        print("It.: " + str(k) + " Time: " + str(self.time[7]) + " Info: " + str(x_best.info) + " Tot. info: "+str(x_best.totalinfo) + " Cost: " + str(x_best.cost) + " Totalcost: "+str(x_best.totalcost) +" Nodes: "+str(len(self.V)))
+                        # if k==200:
+                        #     for i in range(10): # rewire the 10 best nodes
+                        #         info = {node: node.totalinfo for node in self.X_soln}
+                        #         #self.x_best = max(info, key=info.get)
+                        #         curnode = sorted(info, key=info.get)[-(i+1)]
+                        #         self.Rewiring_afterv2(curnode)
+                        #     #self.Rewiring_after(self.x_best)
+                        #     info = {node: node.totalinfo for node in self.X_soln}
+                        #     self.x_best = max(info, key=info.get)
+                        #     print("Best node after rewiring: tot. info: "+str(x_best.totalinfo)+" Cost: "+str(x_best.totalcost))
         # Rewiring in Hindsight:
         info = {node: node.totalinfo for node in self.X_soln}
         for i in range(10):  # rewire the 10 best nodes
@@ -272,6 +299,20 @@ class IRrtStar:
         #self.path = self.ExtractPath(x_best)
         #[self.path,nodes] = self.ExtractPath(x_best)
         [self.path,infopath] = self.ExtractPath(x_best)
+
+        # doubleroundstrategy:
+        # first round best path:
+        info_firstround = {node: node.totalinfo for node in self.X_soln_prev}
+        x_best_firstround = max(info_firstround, key=info_firstround.get)
+        [path_firstround,infopath_firstround]=self.ExtractPath(x_best_firstround)
+        node = x_best
+        while node.parent:
+            if node.parent not in self.X_soln and node.parent in self.X_soln_prev:
+                print("Information value of first round only = "+str(x_best_firstround.totalinfo)+" Cost = "+str(x_best_firstround.totalcost))
+                print("Information value of first round = "+str(node.parent.totalinfo) + " Cost = "+str(node.parent.totalcost))
+                print("Information value of second round = "+str(x_best.totalinfo-node.parent.totalinfo) + " Cost = "+str(x_best.totalcost-node.parent.totalcost))
+                break
+            node = node.parent
 
         #for point in reversed(x_best.infopath):
         #    print("infopoint (x,y)=("+str(point[0])+","+str(point[1])+")")
@@ -315,6 +356,30 @@ class IRrtStar:
             self.animation()
             plt.plot(x_best.x, x_best.y, "bs", linewidth=3)
             plt.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
+            # making the second part of two-day paths another colour
+            secondround = False
+            for index, cell in enumerate(self.path):
+                if secondround:
+                    plt.plot([self.path[index - 1][0], self.path[index][0]],
+                             [self.path[index - 1][1], self.path[index][1]], "-m")
+                if [cell[0], cell[1]] == [self.x_start.x, self.x_start.y] and index > 0 and [self.path[index - 1][0],
+                                                                                             self.path[index - 1][
+                                                                                                 1]] != [self.x_start.x,
+                                                                                                         self.x_start.y] and secondround == False:
+                    secondround = True
+                    # print("Second round starts at index "+str(index))
+
+            #doubleroundstrategy:
+            if path_firstround!=self.path:
+                print("First round is not equal to the final path")
+                plt.plot([x for x, _ in path_firstround], [y for _, y in path_firstround], '-c')
+            else:
+                print("First round is equal to the final path")
+                print(len(self.X_soln),len(self.X_soln_prev))
+
+
+
+
             #plt.plot([x for x, _ in x_best.infopath], [y for _, y in x_best.infopath], '-b')
             #plt.plot([x for x, _ in x_best.lastinfopath], [y for _, y in x_best.lastinfopath], '-c')
             #plt.plot([x for x, _ in self.path[:2]],[y for _, y in self.path[:2]], '-k') # to see whether the path actually ends at the goal
@@ -335,6 +400,23 @@ class IRrtStar:
                 ax.plot(cell[0],cell[1],marker="o",markersize=1,color="blue")
             #ax.plot(x_best.x, x_best.y, marker=(8, 2, 0), color="green", linewidth=3, markersize=20)
             ax.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
+            # making the second part of two-day paths another colour
+            secondround = False
+            for index, cell in enumerate(self.path):
+                if secondround:
+                    plt.plot([self.path[index - 1][0], self.path[index][0]],
+                             [self.path[index - 1][1], self.path[index][1]], "-m")
+                if [cell[0], cell[1]] == [self.x_start.x, self.x_start.y] and index > 0 and [self.path[index - 1][0],
+                                                                                             self.path[index - 1][
+                                                                                                 1]] != [self.x_start.x,
+                                                                                                         self.x_start.y]:
+                    secondround = True
+
+            #doubleroundstrategy:
+            if path_firstround!=self.path:
+                ax.plot([x for x, _ in path_firstround], [y for _, y in path_firstround], '-c')
+
+
             ax.set_title("Spatial distribution of uncertainty and final path")
             #fig.tight_layout()
             plt.show()
@@ -343,6 +425,16 @@ class IRrtStar:
             ax.scatter(k_list, i_list)
             ax.grid()
             plt.show()
+
+
+        #doubleroundstrategy:
+        node = x_best
+        while node.parent:
+            if [node.parent.x,node.parent.y]==[self.x_goal.x,self.x_goal.y]:
+                x_best=node.parent
+                break
+        [self.path,infopath] = self.ExtractPath(x_best)
+        self.budget=self.budget/2
 
         return self.path, infopath, x_best.totalcost, x_best.totalinfo, self.budget, self.step_len, self.search_radius, k, self.costmatrix
 
@@ -659,6 +751,8 @@ class IRrtStar:
             print("Best index: "+str(bestindex))
             #print(node.parent.parent.x, node.parent.parent.y)
             checked_locations=[]
+
+            self.reduction=0 # reset the reduction of the search_radius for Near()
             for x_near in self.Near(self.V, node, self.search_radius):
             #for x_near in self.Near(self.V, node, 10):
                 if not (x_near.x==node.x and x_near.y==node.y) and not ([x_near.x,x_near.y] in checked_locations):
@@ -674,11 +768,10 @@ class IRrtStar:
                     c_old = node.cost
                     if self.kinematic == "dubins" or self.kinematic=="reedsshepp" or self.kinematic=="reedsshepprev":
                         #[cost, info] = self.dubins(node, x_near, False)
-                        c_new = node.parent.parent.cost + self.dubinsnomatrix(node.parent.parent,x_near,True)[0] + self.dubinsnomatrix(node,x_near,True)[0]
+                        c_new = node.parent.parent.cost + self.dubinsnomatrix(node.parent.parent,x_near,True)[0] + self.dubinsnomatrix(x_near,node,True)[0]
 
                     else:
-                        c_new = node.parent.parent.cost + self.Line(node.parent.parent, x_near) + self.Line(node,
-                                                                                                               x_near)
+                        c_new = node.parent.parent.cost + self.Line(node.parent.parent, x_near) + self.Line(x_near,node)
 
                     # if x_new.parent.x==x_near.x and x_new.parent.y==x_near.y:
                     #     return # if the parent of x_new = x_near, we don't want to make the parent of x_near = x_new (because then we create a loose segment
@@ -712,6 +805,8 @@ class IRrtStar:
                         info_new = info
                         if info_new > info_old:  # note: this is different than the condition in pruning
                             self.V.append(newnode)
+                            if newnode.totalcost<=self.budget:
+                                self.X_soln.add(newnode)
 
                             # rewiring:
 
@@ -827,7 +922,8 @@ class IRrtStar:
         X_near = [nodelist[ind] for ind in range(len(dist_table)) if (dist_table[ind] <= max_dist and dist_table[ind] > 0.0)]
         timeend = time.time()
         self.time[3] += (timeend - timestart)
-        if len(X_near)>500 and max_dist>=5:
+        limit = 500
+        if len(X_near)>limit and max_dist>=5:
             self.reductioncount+=1
             #print("Shortening the range for Near: "+str(max_dist-1))
             #print("Current step length ="+str(self.step_len-self.reduction))
@@ -835,7 +931,12 @@ class IRrtStar:
                 self.reductioncount=0
                 self.reduction+=1
                 print("Range is reducted by "+str(self.reduction))
-            return self.Near(nodelist,node,max_dist-1)
+            X_near_reducted = self.Near(nodelist,node,max_dist-1)
+            if len(X_near_reducted)>0:
+                return X_near_reducted
+            else:
+                return X_near
+
         return X_near
 
 
@@ -978,8 +1079,7 @@ class IRrtStar:
 
             info = self.FindInfo(self.x_goal.x,self.x_goal.y,node.x,node.y,node,node.totalcost-node.cost,False)
 
-            # to recheck whether we can make the angle and don't pass through obstacles etc:
-            node.totalcost = node.cost + self.get_distance_and_angle(node,self.x_goal)[0]
+
 
             #node.lastinfopath=infopath
             # print(self.FindInfo(self.x_goal.x,self.x_goal.y,node.x,node.y,node,node.totalcost-node.cost,False))

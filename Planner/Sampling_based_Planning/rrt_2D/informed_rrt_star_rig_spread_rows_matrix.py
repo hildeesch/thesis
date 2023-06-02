@@ -295,8 +295,9 @@ class IRrtStar:
                 timeend = time.time()
                 self.time[6] += (timeend - timestart)
 
-            if k % 50 == 0 and show:
-                self.animation()
+            if k % 50 == 0:
+                if show:
+                    self.animation()
                 self.time[7] = time.time()-totalstarttime
                 print(self.time)
                 if k>0:
@@ -1309,16 +1310,9 @@ class IRrtStar:
                     if (c_new-c_old) < (self.budget-best_node.totalcost): # still within budget
                         newnode = Node((x_near.x, x_near.y))
                         newnode.parent = node.parent.parent
-                        addnew = True
-                        # for node in self.V[::-1]: # to prevent adding doubles
-                        #     if node.parent==newnode.parent and node.x==newnode.x and node.y==newnode.y:
-                        #         newnode=node
-                        #         addnew = False
-                        #         break
-                        if addnew:
-                            newnode.info = node.parent.parent.info + info
-                            newnode.cost = node.parent.parent.cost + cost
-                            self.LastPath(newnode)
+                        newnode.info = node.parent.parent.info + info
+                        newnode.cost = node.parent.parent.cost + cost
+                        self.LastPath(newnode)
                         info = newnode.info + self.FindCostInfoA(newnode.x, newnode.y, node.x, node.y, newnode, True)[1]
 
 
@@ -1326,8 +1320,9 @@ class IRrtStar:
 
                         info_new = info
                         if info_new >= info_old:  # note: this is different than the condition in pruning
-                            if addnew:
-                                self.V.append(newnode)
+                            self.V.append(newnode)
+                            if newnode.totalcost<=self.budget:
+                                self.X_soln.append(newnode)
 
                             # rewiring:
 
