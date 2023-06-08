@@ -41,17 +41,27 @@ def showpath(uncertaintymatrix, path, cost, info,budget, steplength, searchradiu
         plt.show()
 def showpathlong(day,total_days,fig,ax,uncertaintymatrix, path, cost, info,budget, steplength, searchradius, iteration,show,save):
     if day == 1:
+        # 4 days
         # i_max = round(np.ceil(total_days/2))
         # j_max = 2
+        # 20 days
         i_max=4
         j_max=5
+        # 10 days
+        i_max=3
+        j_max=4
         fig, ax = plt.subplots(i_max,j_max)
         #fig.subplots_adjust(wspace=0.075)
     # ax index
+    # four days:
     # i = (day-1)//2
     # j = (day-1)%2
-    i = (day - 1) // 5
-    j = (day - 1) % 5
+    # 20 days
+    # i = (day - 1) // 5
+    # j = (day - 1) % 5
+    # 10 days:
+    i = (day - 1) // 4
+    j = (day - 1) % 4
     # figure
     colormap = cm.Blues
     colormap.set_bad(color='black')
