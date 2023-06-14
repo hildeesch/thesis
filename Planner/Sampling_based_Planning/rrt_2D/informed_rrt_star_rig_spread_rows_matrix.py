@@ -34,6 +34,8 @@ class Node:
         self.totalcost = 0 # including the distance to the goal point
         self.totalinfo = 0 # including the last part to the goal point
         #self.lastinfopath = [] # the monitored grid elements from the node to the goal
+        self.round=1
+        self.prevroundcost=0
 
 class NodeA:
     """
@@ -79,7 +81,8 @@ class IRrtStar:
         self.obs_boundary = self.env.obs_boundary
 
         self.V = [self.x_start]
-        self.X_soln = set()
+        #self.X_soln = set()
+        self.X_soln = []
         self.path = None
 
         self.x_best = self.x_start
@@ -192,6 +195,8 @@ class IRrtStar:
 
     def planning(self):
         show=True
+        doubleround=True
+        rewiringafter=False
         #theta, dist, x_center, C, x_best = self.init()
         #theta, dist, x_center, x_best = self.init()
         x_best = self.init()
@@ -287,7 +292,7 @@ class IRrtStar:
                     timeend = time.time()
                     self.time[5] += (timeend - timestart)
                     if node_new.totalcost <= self.budget:  # extra check for budget for actual parent (cmin+ cost to goal node)
-                        self.X_soln.add(node_new)
+                        self.X_soln.append(node_new)
 
 
                 timestart=time.time()
@@ -317,7 +322,7 @@ class IRrtStar:
         for i in range(10):  # rewire the 10 best nodes
             # self.x_best = max(info, key=info.get)
             curnode = sorted(info, key=info.get)[-(i + 1)]
-            self.Rewiring_afterv2(curnode)
+            self.Rewiring_afterv2(curnode,doubleround)
         # self.Rewiring_after(self.x_best)
         info = {node: node.totalinfo for node in self.X_soln}
         self.x_best = max(info, key=info.get)
@@ -1235,7 +1240,7 @@ class IRrtStar:
             #                     infopath.append([xpoint_, ypoint_])
         return cost,dubins_x,dubins_y,infopath
 
-    def Rewiring_afterv2(self, best_node): #rewiring afterwards
+    def Rewiring_afterv2(self, best_node, doubleround): #rewiring afterwards
         # goal: gain more info while remaining within the budget
         print("Start rewiring after v2")
         print(" Info: " + str(best_node.info) + " Tot. info: " + str(
@@ -1243,19 +1248,35 @@ class IRrtStar:
         bestpath=[]
         infosteps=[]
         node=best_node
-        while node!=self.x_start:
+        prev_copynode = None
+        costfirstround=best_node.prevrouncost
+        while node != self.x_start:
             # copynode = deepcopy(node) # just now
-            # self.V.append(copynode)
+            copynode = Node((node.x, node.y))
+            if prev_copynode:
+                prev_copynode.parent = copynode
+            # copynode.parent = copyparent
+            copynode.info = node.info
+            copynode.cost = node.cost
+            copynode.totalinfo = node.totalinfo
+            copynode.totalcost = node.totalcost
+            if node == best_node:
+                copybest_node = copynode
+            self.V.append(copynode)
+            self.X_soln.append(copynode)
             # if len(bestpath)>0:
             #     bestpath[-1].parent=copynode # just now
-            # bestpath.append(copynode) # just now
-            bestpath.append(node)
+            bestpath.append(copynode) #
+            #bestpath.append(node)
             infosteps.append(node.info-node.parent.info)
             # the infosteps contain the added info for the parent to the node (of that node)
-
+            prev_copynode=copynode
             node=node.parent
         # bestpath[-1].parent=self.x_start # just now
-
+        prev_copynode.parent=self.x_start # for the last one
+        if costfirstround==0 or not doubleround:
+            #print("Rewiring: updated first round cost")
+            costfirstround=best_node.totalcost
 
         pastindexes = []
         totalinfo = best_node.totalinfo
@@ -1287,7 +1308,7 @@ class IRrtStar:
             checked_locations = []
             for x_near in self.Near(self.V, node, self.search_radius):
                 # for x_near in self.Near(self.V, node, 10):
-                if not (x_near.x == node.x and x_near.y == node.y) and not ([x_near.x, x_near.y] in checked_locations):
+                if not ([x_near.x,x_near.y]==[node.x,node.y]) and not ([x_near.x,x_near.y] in checked_locations) and not ([node.parent.x,node.parent.x]==[self.x_goal.x,self.x_goal.y]):
                     checked_locations.append([x_near.x, x_near.y])
                     x_temp = Node((node.x, node.y))
                     x_temp.parent = node.parent
@@ -1307,7 +1328,8 @@ class IRrtStar:
 
                     # if x_new.parent.x==x_near.x and x_new.parent.y==x_near.y:
                     #     return # if the parent of x_new = x_near, we don't want to make the parent of x_near = x_new (because then we create a loose segment
-                    if (c_new-c_old) < (self.budget-best_node.totalcost): # still within budget
+                    costsecondround = best_node.totalcost - costfirstround
+                    if (node.round == 1 and (c_new - c_old) < (self.budget - costfirstround)) or (node.round == 2 and (c_new - c_old) < (self.budget - costsecondround)):  # still within budget
                         newnode = Node((x_near.x, x_near.y))
                         newnode.parent = node.parent.parent
                         newnode.info = node.parent.parent.info + info
@@ -1321,9 +1343,12 @@ class IRrtStar:
                         info_new = info
                         if info_new >= info_old:  # note: this is different than the condition in pruning
                             self.V.append(newnode)
-                            if newnode.totalcost<=self.budget:
+                            if (newnode.round==1 and newnode.totalcost<=self.budget) or (newnode.round==2 and (newnode.totalcost-newnode.prevroundcost)<=self.budget):
                                 self.X_soln.append(newnode)
-
+                            if node.round==1:
+                                costfirstround+=(c_new-c_old)
+                            else: #round 2:
+                                costsecondround+=(c_new-c_old)
                             # rewiring:
 
                             node.parent = newnode
@@ -1365,6 +1390,7 @@ class IRrtStar:
                 # i+=1
                 # if i==len(bestpath):
                 #     notfinished=False
+        best_node=copybest_node
         print("End rewiring after v2")
         print(" Info: " + str(best_node.info) + " Tot. info: " + str(
             best_node.totalinfo) + " Cost: " + str(best_node.totalcost))
@@ -1402,6 +1428,12 @@ class IRrtStar:
                     node.info = parent.info + info
 
                     node.cost = parent.cost + dist
+
+                    if node.round==2:
+                        if [node.x,node.y]==[self.x_start.x,self.x_start.y]: # start of round 2
+                            node.prevroundcost=node.totalcost
+                        else:
+                            node.prevroundcost=node.parent.prevroundcost
 
                     self.LastPath(node)
 
