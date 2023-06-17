@@ -230,13 +230,13 @@ class IRrtStar:
                     else:
                         count_down=20 #reset
                         print("reset countdown")
-            if k==151: # to test up to certain iteration
+            if k==101: # to test up to certain iteration
                 count_down=0
             # if i_list_inc_10_avg_der<0.05 and i_list_inc_10_avg<0.05:
             #     stopcriterion=True
             if count_down<=0:
                 stopcriterion=True
-            if stopcriterion and (k>150 or k>self.iter_max-3):
+            if stopcriterion and (k>100 or k>self.iter_max-3):
                 print("Reached stopping criterion at iteration "+str(k))
                 break # iterating is stopped if stopping criterion is reached
 
@@ -320,8 +320,6 @@ class IRrtStar:
                     if node_new.totalcost <= self.budget:  # extra check for budget for actual parent
                         #self.X_soln.add(node_new)
                         self.X_soln.append(node_new)
-                        if node_new.totalcost>self.budget:
-                            print("New node surpasses the budget!!!")
                     # tworoundstrategy2:
                     if doubleround:
                         if node_new.round == 2 and (node_new.totalcost-node_new.prevroundcost) <= (self.budget):
@@ -415,7 +413,6 @@ class IRrtStar:
         #         break
         #     node = node.parent
 
-        #tworoundstrategy2:
 
 
         node = x_best
@@ -1105,7 +1102,7 @@ class IRrtStar:
             node = bestpath[bestindex]
             # so we rewire the part that is at the moment most profitable
 
-            print("Best index: "+str(bestindex))
+            #print("Best index: "+str(bestindex))
             #print(node.parent.parent.x, node.parent.parent.y)
             checked_locations=[]
 
@@ -1171,14 +1168,6 @@ class IRrtStar:
                             if (newnode.round==1 and newnode.totalcost<=self.budget) or (newnode.round==2 and (newnode.totalcost-newnode.prevroundcost)<=self.budget):
                                 #self.X_soln.add(newnode)
                                 self.X_soln.append(newnode)
-                            # tworoundstrategy2:
-                            if doubleround:
-                                if node.round==1:
-                                    costfirstround+=(c_new-c_old)
-                                else: #round 2:
-                                    costsecondround+=(c_new-c_old)
-                            else:
-                                costfirstround+=(c_new-c_old)
 
                             # rewiring:
 
@@ -1202,6 +1191,14 @@ class IRrtStar:
                                 self.Recalculate(node,None)
                             else:
                                 bestpath[bestindex + 1] = newnode
+                                # tworoundstrategy2:
+                                if doubleround:
+                                    if node.round == 1:
+                                        costfirstround += (c_new - c_old)
+                                    else:  # round 2:
+                                        costsecondround += (c_new - c_old)
+                                else:
+                                    costfirstround += (c_new - c_old)
 
                                 print("Improved path through hindsight rewiring with increase in info: "+str(best_node.totalinfo-totalinfo))
                                 totalinfo=best_node.totalinfo
