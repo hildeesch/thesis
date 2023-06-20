@@ -86,7 +86,7 @@ class IRrtStar:
         i_best = 0
         for k in range(self.iter_max):
             #time.sleep(0.1)
-            if k>=400-3: #only evaluate from when we might want it to stop #TODO make 400 a variable
+            if k>=400-3: #only evaluate from when we might want it to stop
                 cost = {node: node.totalcost for node in self.X_soln}
                 info = {node: node.totalinfo for node in self.X_soln}
                 #x_best = min(cost, key=cost.get)
@@ -243,14 +243,13 @@ class IRrtStar:
                     #     print("Alternative pruned")
                     # prune the node from all nodes
 
-                    if node1 in self.V: #still have to figure out why this is needed (TODO)
+                    if node1 in self.V:
                         self.V.remove(node1)
                     #nodelist.pop(index)
                     #costlist.pop(index)
                     #infolist.pop(index)
                     #costlist[index]=np.nan
                     #infolist[index]=np.nan
-                    # TODO still: how to "pop" or "remove" from the list we iterate over? to speed up pruningz
                     #if node1 in self.X_soln:
                     #    self.X_soln.remove(node1)  # also from the solutions
                     self.X_soln.discard(node1)
@@ -273,7 +272,7 @@ class IRrtStar:
         return X_near
 
 #    def Sample(self, c_max, c_min, x_center, C):
-    def Sample(self, c_max, c_min, x_center): #TODO can we leave out this function?
+    def Sample(self, c_max, c_min, x_center):
 
         c_max=np.inf
         if c_max < np.inf:

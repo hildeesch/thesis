@@ -350,14 +350,13 @@ class IRrtStar:
                     #     print("Alternative pruned")
                     # prune the node from all nodes
 
-                    if node1 in self.V: #still have to figure out why this is needed (TODO)
+                    if node1 in self.V:
                         self.V.remove(node1)
                     #nodelist.pop(index)
                     #costlist.pop(index)
                     #infolist.pop(index)
                     #costlist[index]=np.nan
                     #infolist[index]=np.nan
-                    # TODO still: how to "pop" or "remove" from the list we iterate over? to speed up pruningz
                     if node1 in self.X_soln:
                         self.X_soln.remove(node1)  # also from the solutions
 

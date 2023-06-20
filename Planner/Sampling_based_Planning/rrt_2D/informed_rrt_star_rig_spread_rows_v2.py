@@ -377,7 +377,7 @@ class IRrtStar:
             #    [infopath, info] = self.FindInfo(edgepath[index+1][0], edgepath[index+1][1], edgepath[index][0], edgepath[index][1], infopath, dy,
             #                                 True)
 
-            # for index, edgepoint in enumerate(self.row_edges[index_start:index_end + 1]): #TODO: only adds up --> what if the index goes down
+            # for index, edgepoint in enumerate(self.row_edges[index_start:index_end + 1]):
             #     for infopoint in self.infopath_left[index][index+1]:
             #         if infopoint not in currentinfopath:
             #             # infopath.append(infopoint)
@@ -434,7 +434,7 @@ class IRrtStar:
             #     [infopath, info] = self.FindInfo(edgepath[index+1][0], edgepath[index+1][1], edgepath[index][0], edgepath[index][1], infopath, dy,
             #                                  True)
 
-            # for index, edgepoint in enumerate(self.row_edges[index_start:index_end + 1]): #TODO: only adds up --> what if the index goes down
+            # for index, edgepoint in enumerate(self.row_edges[index_start:index_end + 1]):
             #     for infopoint in self.infopath_right[index][index+1]:
             #         if infopoint not in currentinfopath:
             #             # infopath.append(infopoint)
@@ -528,14 +528,13 @@ class IRrtStar:
                     #     print("Alternative pruned")
                     # prune the node from all nodes
 
-                    if node1 in self.V: #still have to figure out why this is needed (TODO)
+                    if node1 in self.V: #still have to figure out why this is needed
                         self.V.remove(node1)
                     #nodelist.pop(index)
                     #costlist.pop(index)
                     #infolist.pop(index)
                     #costlist[index]=np.nan
                     #infolist[index]=np.nan
-                    # TODO still: how to "pop" or "remove" from the list we iterate over? to speed up pruningz
                     if node1 in self.X_soln:
                         self.X_soln.remove(node1)  # also from the solutions
 
@@ -716,7 +715,7 @@ class IRrtStar:
             max_dist = self.step_len
         #heuristic:
         nodelist_new = nodelist[:]
-        for nd in nodelist: #TODO check if this actually speeds things up
+        for nd in nodelist:
             if (nd.x-node.x)**2>max_dist**2 and (nd.y-node.y)**2>max_dist**2:
                 nodelist_new.remove(nd)
         #actual calculation

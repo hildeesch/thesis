@@ -34,7 +34,7 @@ def print_hi(name):
     # Choose the field shape:
     [field_matrix,field_vertex] = polygon("hexagon",False)
 
-    rowsbool = True #if you want without rows, set to False:
+    rowsbool = False #if you want without rows, set to False:
     if rowsbool:
         [plant_matrix,row_nrs,row_edges,field_vertex] = withrows(field_matrix,2,2,field_vertex,False)
     else:

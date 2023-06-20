@@ -87,6 +87,10 @@ class IRrtStar:
         self.path = None
 
         self.x_best = self.x_start
+        self.i_best = 0
+
+        # for stopping criterion:
+        self.k_list, self.i_list, self.i_list_avg, self.i_list_avg_der, self.i_list_avg_der2 = [], [], [], [], []
 
         self.reductioncount = 0 # to count the shortening of range in Near()
         self.reduction = 0
@@ -100,7 +104,7 @@ class IRrtStar:
             self.angularcost=1 # set the turning cost (in rad)
         self.dubinsmat = {}
 
-
+        # for saving of cost/info matrices
         self.uncertaintymatrix = uncertaintymatrix
         self.row_nrs = row_nrs
         self.row_edges = row_edges
@@ -202,44 +206,55 @@ class IRrtStar:
         #theta, dist, x_center, x_best = self.init()
         x_best = self.init()
         #c_best = np.inf
-        count_down=3
+        #count_down=3
         i_best = 0
         startlen=0 # for checking node increase
         totalstarttime=time.time()
 
-        # for now (to determine stopping criterion/ keep track of i_best over time):
-        k_list = []
-        i_list = []
 
         if self.kinematic not in ["none","limit","ranger","dubins","reedsshepp","reedsshepprev"]:
             print("Kinematic constraint setting unknown. Set one of the following: none,limit,ranger,dubins,reedsshepp,reedsshepprev")
             return None
-        k=0
-        while k<self.iter_max:
-            k+=1
-            #time.sleep(0.1)
-            if k>40-3 or k>(self.iter_max-3): #only evaluate from when we might want it to stop
-                #print("Start countdown")
+
+        # to keep track of the stopping criterium
+        k_list = []
+        i_list = []
+        i_list_inc = []
+        i_list_10 = []
+        i_list_inc_10_avg = []  # first derivative
+        i_list_inc_10_avg_der = []  # second derivative
+        k = 0
+        iter_min=200
+        stopcriterion = False
+        while k < self.iter_max:
+            k += 1
+            # time.sleep(0.1)
+            if k >= 3 - 3:  # only evaluate from when we might want it to stop #TODO make 400 a variable
                 cost = {node: node.totalcost for node in self.X_soln}
                 info = {node: node.totalinfo for node in self.X_soln}
-                #x_best = min(cost, key=cost.get)
-                x_best = max(info, key=info.get)
-                #c_best = cost[x_best]
-                i_last_best = i_best
-                i_best = info[x_best]
+                # x_best = min(cost, key=cost.get)
+                if len(info) > 0 and not double:
+                    self.x_best = max(info, key=info.get)
+                    x_best = max(info, key=info.get)
+                    # c_best = cost[x_best]
+                    i_last_best = i_best
+                    self.i_best = info[x_best]
 
-                k_list.append(k)
-                i_list.append(i_best)
+                    i_best = info[x_best]
 
-                #if i_last_best>0: # to prevent division by zero
-                if ((i_best-i_last_best)/i_last_best)<0.01: #smaller than 1% improvement
-                    count_down-=1
-                else:
-                    count_down=20 #reset
-                    print("Reset countdown")
+                    stopcriterion = self.StopCriterion(k)
+
+                    #if i_last_best>0: # to prevent division by zero
+                    # if ((i_best-i_last_best)/i_last_best)<0.01: #smaller than 1% improvement
+                    #     count_down-=1
+                    # else:
+                    #     count_down=20 #reset
+                    #     print("Reset countdown")
             if k==201: # to test up to certain iteration
-                count_down=0
-            if count_down<=0 and (k>200 or k>(self.iter_max-3)):
+                #count_down=0
+                stopcriterion=True
+            #if count_down<=0 and (k>200 or k>(self.iter_max-3)):
+            if stopcriterion and (k>iter_min or k>(self.iter_max-3)):
                 print("Reached stopping criterion at iteration "+str(k))
                 break # we stop iterating if the best score is not improving much anymore and we already passed at least ... cycles
 
@@ -477,10 +492,43 @@ class IRrtStar:
             plt.show()
             #plt.close()
 
+            k_list_avg_neg = []
+            i_list_inc_10_avg_neg = []
+            k_list_avg_der_neg = []
+            i_list_inc_10_avg_der_neg = []
+            for index in range(len(k_list)):
+                if i_list_inc_10_avg[index] <= 0:
+                    k_list_avg_neg.append(k_list[index])
+                    i_list_inc_10_avg_neg.append(i_list_inc_10_avg[index])
+                if i_list_inc_10_avg_der[index] <= 0:
+                    k_list_avg_der_neg.append(k_list[index])
+                    i_list_inc_10_avg_der_neg.append(i_list_inc_10_avg_der[index])
 
-            fig,ax = plt.subplots()
-            plt.scatter(k_list,i_list)
-            plt.show
+            fig, ax = plt.subplots(2, 2)
+            ax[0, 0].scatter(k_list, i_list, s=0.5)
+            ax[0, 0].set_title("Best node info")
+            ax[0, 1].scatter(k_list, i_list_10, s=0.5)
+            ax[0, 1].set_title("10 best nodes info (avg)")
+            ax[1, 0].scatter(k_list, i_list_inc_10_avg, s=0.5)
+            ax[0].scatter(k_list_avg_neg, i_list_inc_10_avg_neg, s=0.5, c='r')
+            ax[1, 0].set_title("10 best nodes info increase 10 it")
+            ax[1, 1].scatter(k_list, i_list_inc_10_avg_der, s=0.5)
+            ax[1, 1].set_title("10 best nodes info increase 10 der2")
+            plt.show()
+
+            fig, ax = plt.subplots(2, 1)
+            ax[0].scatter(k_list, i_list_inc_10_avg, s=0.5)
+            ax[0].scatter(k_list_avg_neg, i_list_inc_10_avg_neg, s=0.5, c='r')
+            ax[0].set_title("10 best nodes info increase 10 it")
+            ax[0].grid()
+            ax[0].set_ylim((-0.05, 0.05))
+            ax[1].scatter(k_list, i_list_inc_10_avg_der, s=0.5)
+            ax[1].scatter(k_list_avg_der_neg, i_list_inc_10_avg_der_neg, s=0.5, c='r')
+            ax[1].set_title("10 best nodes info increase 10 der2")
+            ax[1].grid()
+            ax[1].set_ylim((-0.05, 0.05))
+
+            plt.show()
 
         if doubleround and rewiringafter:
 
@@ -502,6 +550,40 @@ class IRrtStar:
 
         return self.path, infopathradius, x_best.totalcost, x_best.totalinfo, self.budget, self.step_len, self.search_radius, k, self.costmatrix
 
+    def StopCriterion(self, k):
+        stopcriterion = False
+        # self.StopCriterion(k_list, i_list, i_list_avg, i_list_avg_der, i_list_avg_der2)
+        info = {node: node.totalinfo for node in self.X_soln}  # TODO: maybe see if can prevent computing this twice
+
+        self.k_list.append(k)
+        self.i_list.append(self.i_best)
+
+        i_list_avg_cur = []
+        # if len(self.X_soln)>=10:
+        avg_amount=10 # over how many nodes do we average (the best x nodes)
+        for i in range(1, min(avg_amount+1, len(info) + 1)):  # average over the 10 best nodes (or less if there are not 10 yet)
+            # for i in range(int(np.ceil(len(self.X_soln)/10))): # average over the top 10% of nodes
+            # self.x_best = max(info, key=info.get)
+            i_list_avg_cur.append(info[sorted(info, key=info.get)[-i]])
+        self.i_list_avg.append(sum(i_list_avg_cur) / len(i_list_avg_cur))
+        # derivatives: #note that we use the derivative of the actual info values, not the increase
+        der_iterations = 25
+        prevnr = min(len(self.i_list_avg), der_iterations + 1)
+        if prevnr < 2:
+            self.i_list_avg_der.append(1)
+        else:
+            self.i_list_avg_der.append((self.i_list_avg[-1] - self.i_list_avg[-(prevnr)]) / (prevnr - 1))
+        # prevnr = min(len(i_list_inc_10_avg), 26)
+        prevnr = min(len(self.i_list_avg_der), 2)
+        if prevnr < 2:
+            self.i_list_avg_der2.append(1)
+        else:
+            self.i_list_avg_der2.append((self.i_list_avg_der[-1] - self.i_list_avg_der[-(prevnr)]) / (prevnr - 1))
+
+        if self.i_list_avg_der[-1]==0 and k>der_iterations:
+            stopcriterion=True
+
+        return stopcriterion
     def splitDoublePath(self,initial_node):
         if initial_node.round==1 or ((initial_node.totalcost-initial_node.prevroundcost)==0): # there is no second round
             return initial_node,None
@@ -538,7 +620,7 @@ class IRrtStar:
 
         self.LastPath(startsecondround)
         startsecondround.prevroundcost=0
-        self.Recalculate(startsecondround, None)
+        self.Recalculate(startsecondround)
         if nodefirstround.cost==0:
             return nodesecondround,None
         elif nodesecondround.cost==0:
@@ -1465,8 +1547,7 @@ class IRrtStar:
 
                             # Scenario 1:
                             # else:
-                            self.Recalculate(node,
-                                             None)  # recalculates the cost and info for nodes further down the path
+                            self.Recalculate(node)  # recalculates the cost and info for nodes further down the path
                             if totalinfo>=best_node.totalinfo:
                                 # reverse rewiring
                                 node.parent = x_temp.parent
@@ -1474,7 +1555,7 @@ class IRrtStar:
                                 node.cost = x_temp.cost
                                 node.totalinfo = x_temp.totalinfo
                                 node.totalcost = x_temp.totalcost
-                                self.Recalculate(node,None)
+                                self.Recalculate(node)
                             else:
                                 bestpath[bestindex + 1] = newnode
                                 # tworoundstrategy2:
@@ -1527,82 +1608,27 @@ class IRrtStar:
                     self.V.append(Round2StartNode)
                     #self.X_soln.add(Round2StartNode)
                     self.X_soln.append(Round2StartNode)
-    def Recalculate(self,parent, prevparent=None):
+    def Recalculate(self,parent):
         for node in self.V:  # to recalculate the cost and info for nodes further down the line
             if node.parent == parent:
-                # Scenario 3:
-                if self.scenario==3 or self.scenario==6:
-                    if not prevparent==None:
-                        # saving temporary node to compare the total info values (TODO: check if deepcopy is faster than assigning all the node parameters)
-                        x_temp = Node((node.x, node.y))
-                        x_temp.parent = prevparent
-                        x_temp.info = node.info
-                        x_temp.cost = node.cost
-                        x_temp.totalinfo = node.totalinfo
-                        x_temp.totalcost = node.totalcost
+                if node==self.x_best:
+                    previnfo=node.info
+                    prevtotalinfo=node.totalinfo
 
+                [dist,info] = self.FindCostInfoA(parent.x, parent.y, node.x, node.y, parent, True)
 
-                # Scenario 2:
-                if self.scenario==2:
-                # if the old one had a higher total value, we change the parent to the old (the copy) #TODO check how valid this is
-                    if not prevparent==None:
-                        node.parent=prevparent
+                node.info = parent.info + info
 
-                #if prevparent==None:
-                #if True: #adapted scenario 3
-                if self.scenario==3 or self.scenario==4 or self.scenario==1: #recalculating
-                    if node==self.x_best:
-                        previnfo=node.info
-                        prevtotalinfo=node.totalinfo
+                node.cost = parent.cost + dist
 
-                    [dist,info] = self.FindCostInfoA(parent.x, parent.y, node.x, node.y, parent, True)
+                if node.round==2:
+                    if [node.x,node.y]==[self.x_start.x,self.x_start.y]: # start of round 2
+                        node.prevroundcost=node.totalcost
+                    else:
+                        node.prevroundcost=node.parent.prevroundcost
 
-                    node.info = parent.info + info
-
-                    node.cost = parent.cost + dist
-
-                    if node.round==2:
-                        if [node.x,node.y]==[self.x_start.x,self.x_start.y]: # start of round 2
-                            node.prevroundcost=node.totalcost
-                        else:
-                            node.prevroundcost=node.parent.prevroundcost
-
-                    self.LastPath(node)
-
-                    # if node == self.x_best and node.totalinfo<prevtotalinfo:
-                    #     print("[RECALCULATE] Best node is removed, prev totinfo: " + str(
-                    #                 prevtotalinfo) + " Previnfo: " + str(previnfo) + " New totinfo: " + str(
-                    #                 node.totalinfo) + " Newinfo: " + str(node.info))
-                oldparent=None
-                # scenario 3
-                if self.scenario==3:
-                    if not prevparent==None:
-                        #if x_temp.totalinfo>node.totalinfo:
-                        self.V.append(x_temp)
-                        # possibly: tab next line
-                        oldparent=x_temp
-                    #     print("Totalinfo recalculating not increased, copy of old node added")
-                    # else:
-                    #     print("Totalinfo recalculating increased, copy of old node not added")
-                #only continue if the rewiring increased the totalinfo (prevparent==None)
-                if self.scenario==6:
-                    if not prevparent==None:
-                        if x_temp.totalinfo>node.totalinfo:
-                            self.V.append(x_temp)
-                        # possibly: tab next line
-                        oldparent=x_temp
-
-                # scneario 7:
-                if self.scenario==7: # always saving both copies and taking the oldparent with us
-                    x_temp = Node((node.x, node.y))
-                    x_temp.parent = prevparent
-                    x_temp.info = node.info
-                    x_temp.cost = node.cost
-                    x_temp.totalinfo = node.totalinfo
-                    x_temp.totalcost = node.totalcost
-                    self.V.append(x_temp)
-                    oldparent = x_temp
-                self.Recalculate(node,oldparent)
+                self.LastPath(node)
+                self.Recalculate(node)
     def Rewiring(self, x_near, x_new):
         if x_new.parent.x == x_near.x and x_new.parent.y == x_near.y:
             return  # if the parent of x_new = x_near, we don't want to make the parent of x_near = x_new (because then we create a loose segment
