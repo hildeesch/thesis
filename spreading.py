@@ -166,9 +166,10 @@ def uncertaintyweeds(matrixstructure,matrixplants,matrixweeds,weed,show=True):
         plt.show()
 
     return uncertaintymatrix
-def weedsupdate(weed,matrixplants,weedmatrix,weedmatrix_est):
+def weedsupdate(weed,matrixplants,weedmatrix,weedmatrix_est,reproductionrate=None):
     print("update based on weed characteristics")
-    reproductionrate= np.random.normal(weed.reproductionrate, weed.reproductionrateSTD)
+    if not reproductionrate:
+        reproductionrate= np.random.normal(weed.reproductionrate, weed.reproductionrateSTD)
     STD = weed.reproductionrateSTD
     spreadrange = weed.spreadrange
     plantattach = weed.plantattach
@@ -532,12 +533,13 @@ def uncertaintypathogen(matrixstructure,matrixplants,matrixpathogen,pathogen,sho
 
     return uncertaintymatrix
 
-def pathogenupdate(pathogen,matrixplants,pathogenmatrix, pathogenmatrix_est):
+def pathogenupdate(pathogen,matrixplants,pathogenmatrix, pathogenmatrix_est, reproductionrate=None):
     print("update based on pathogen characteristics")
     infectionduration = pathogen.infectionduration
     spreadrange = pathogen.spreadrange
     reproductionfraction = pathogen.reproductionfraction
-    reproductionrate = np.random.normal(pathogen.reproductionrate, pathogen.reproductionrateSTD)
+    if not reproductionrate:
+        reproductionrate = np.random.normal(pathogen.reproductionrate, pathogen.reproductionrateSTD)
 
     saturation = pathogen.saturation
     plantattach = True  # always true for pathogen

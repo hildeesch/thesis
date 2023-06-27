@@ -60,7 +60,7 @@ class NodeA:
         return self.position == other.position
 class IRrtStar:
     def __init__(self, x_start, x_goal, step_len,
-                 goal_sample_rate, search_radius, iter_max,uncertaintymatrix,row_nrs,row_edges,field_vertex,scenario,costmatrix):
+                 goal_sample_rate, search_radius, iter_max,uncertaintymatrix,row_nrs,row_edges,field_vertex,scenario,matrices,samplelocations):
         self.x_start = Node(x_start)
         self.x_goal = Node(x_goal)
         self.step_len = step_len
@@ -72,7 +72,7 @@ class IRrtStar:
         self.plotting = plotting.Plotting(x_start, x_goal)
         self.utils = utils.Utils(uncertaintymatrix)
 
-        #self.fig, self.ax = plt.subplots()
+        self.fig, self.ax = plt.subplots()
 
         self.delta = self.utils.delta
         self.x_range = self.env.x_range
@@ -92,12 +92,24 @@ class IRrtStar:
         # for stopping criterion:
         self.k_list, self.i_list, self.i_list_avg, self.i_list_avg_der, self.i_list_avg_der2 = [], [], [], [], []
 
-        self.reductioncount = 0 # to count the shortening of range in Near()
-        self.reduction = 0
-
         self.budget=300
         self.inforadius=0
         self.scenario = scenario
+        self.samplelocations = samplelocations
+        self.samplelocations_add = False
+        if not samplelocations:
+            self.samplelocations = []
+            self.samplelocations_add = True
+        # scenario = [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
+        if scenario:
+            self.budget = scenario[1]
+            self.boolrewiring = scenario[3]
+            self.stopsetting = scenario[6]
+        else:
+            self.budget = 500
+            self.boolrewiring = True
+            self.stopsetting = "mild"
+
         self.kinematic = "none"  # kinematic constraint
         # choices: "none", "dubins", "reedsshepprev", "reedsshepp", "ranger", "limit"
         if self.kinematic == "ranger" or self.kinematic=="limit":
@@ -120,14 +132,20 @@ class IRrtStar:
         self.infopath_right = np.empty((len(self.row_nrs),len(self.row_nrs)),dtype = object )
         self.info_left = np.zeros((len(self.row_nrs),len(self.row_nrs)))
         self.info_right = np.zeros((len(self.row_nrs),len(self.row_nrs)))
-        if costmatrix is None:
+
+        self.infopathmatrix = np.empty((100 * 100, 100 * 100), dtype=object)
+        self.infomatrix = np.empty((100 * 100, 100 * 100))
+        if matrices is None:
             self.costmatrix = np.empty((100*100,100*100) )
+            # self.infopathmatrix = np.empty((100 * 100, 100 * 100), dtype=object)
+            # self.infomatrix = np.empty((100 * 100, 100 * 100))
+            self.anglematrix = np.empty((100 * 100, 100 * 100))
         else:
-            self.costmatrix = costmatrix
+            self.costmatrix = matrices[0]
+            # self.infopathmatrix = matrices[1]
+            # self.infomatrix= matrices[2]
+            self.anglematrix = matrices[1]
         #self.directionmatrix = np.empty((100*100,100*100),dtype = object )
-        self.anglematrix = np.empty((100*100,100*100) )
-        self.infopathmatrix = np.empty((100*100,100*100),dtype = object )
-        self.infomatrix = np.empty((100*100,100*100) )
 
         self.allpoints=[] # all the points that can be sampled for nodes
         if self.kinematic=="dubins" or self.kinematic=="reedsshepp":
@@ -199,8 +217,8 @@ class IRrtStar:
         return x_best
 
     def planning(self):
-        show=False
-        doubleround=True
+        show=True
+        doubleround=False
         rewiringafter=False
         #theta, dist, x_center, C, x_best = self.init()
         #theta, dist, x_center, x_best = self.init()
@@ -216,20 +234,16 @@ class IRrtStar:
             print("Kinematic constraint setting unknown. Set one of the following: none,limit,ranger,dubins,reedsshepp,reedsshepprev")
             return None
 
-        # to keep track of the stopping criterium
-        k_list = []
-        i_list = []
-        i_list_inc = []
-        i_list_10 = []
-        i_list_inc_10_avg = []  # first derivative
-        i_list_inc_10_avg_der = []  # second derivative
+
         k = 0
         iter_min=200
+        if iter_min>self.iter_max:
+            iter_min=0
         stopcriterion = False
         while k < self.iter_max:
             k += 1
             # time.sleep(0.1)
-            if k >= 3 - 3:  # only evaluate from when we might want it to stop #TODO make 400 a variable
+            if k >= 3 - 3:  # only evaluate from when we might want it to stop
                 cost = {node: node.totalcost for node in self.X_soln}
                 info = {node: node.totalinfo for node in self.X_soln}
                 # x_best = min(cost, key=cost.get)
@@ -243,6 +257,9 @@ class IRrtStar:
                     i_best = info[x_best]
 
                     stopcriterion = self.StopCriterion(k)
+                    if stopcriterion:
+                        print("Stop criterion = True at it. "+str(k))
+                        stopcriterion=False
 
                     #if i_last_best>0: # to prevent division by zero
                     # if ((i_best-i_last_best)/i_last_best)<0.01: #smaller than 1% improvement
@@ -250,7 +267,7 @@ class IRrtStar:
                     # else:
                     #     count_down=20 #reset
                     #     print("Reset countdown")
-            if k==201: # to test up to certain iteration
+            if k==301: # to test up to certain iteration
                 #count_down=0
                 stopcriterion=True
             #if count_down<=0 and (k>200 or k>(self.iter_max-3)):
@@ -258,7 +275,7 @@ class IRrtStar:
                 print("Reached stopping criterion at iteration "+str(k))
                 break # we stop iterating if the best score is not improving much anymore and we already passed at least ... cycles
 
-            if k%50==0:
+            if k%50==0 and not double:
                 print("ATTENTION!!! ATTENTION!!! ATTENTION!!! AGAIN FIFTY CYCLES FURTHER, CURRENT CYCLE ="+str(k)) # to know how far we are
             endlen=len(self.V)
             print("Nr of nodes added: "+str(endlen-startlen))
@@ -266,7 +283,13 @@ class IRrtStar:
                 k-=1
             startlen = len(self.V)
             timestart = time.time()
-            x_rand = self.SampleFreeSpace()
+            if self.samplelocations_add:
+                x_rand = self.SampleFreeSpace()
+                self.samplelocations.append(x_rand)
+            else:
+                x_rand=self.samplelocations[k]
+                if double: # otherwise we keep trying the same location again and again
+                    x_rand = self.SampleFreeSpace()
             timeend= time.time()
             self.time[0]+=(timeend-timestart)
             timestart=time.time()
@@ -287,6 +310,8 @@ class IRrtStar:
                     double=True #there is already a node at this location, so we skip it
                     print("double")
                     k-=1
+                    if self.samplelocations_add:
+                        self.samplelocations.pop()
                     break
             #if x_nearest.cost + self.Line(x_nearest, x_new) + self.Line(x_new, self.x_goal) < self.budget and not double:  # budget check for nearest parent (to make it more efficient)
             if not double:  # budget check for nearest parent (to make it more efficient)
@@ -349,7 +374,7 @@ class IRrtStar:
                     # print("Best node after rewiring: tot. info: "+str(x_best.totalinfo)+" Cost: "+str(x_best.totalcost))
 
         # Rewiring in Hindsight:
-        if rewiringafter or not doubleround:
+        if rewiringafter or not doubleround and self.boolrewiring:
             info = {node: node.totalinfo for node in self.X_soln}
             for i in range(10):  # rewire the 10 best nodes
                 # self.x_best = max(info, key=info.get)
@@ -361,7 +386,7 @@ class IRrtStar:
             x_best = max(info, key=info.get)
             print("Best node after rewiring: tot. info: " + str(x_best.totalinfo) + " Cost: " + str(
                 x_best.totalcost))
-        if doubleround and not rewiringafter:
+        if doubleround and not rewiringafter and self.boolrewiring:
             doubleround = False  # to make sure it rewires in the correct way
             top20nodes = []  # top 10 nodes split in two rounds each
             info = {node: node.totalinfo for node in self.X_soln}
@@ -492,41 +517,46 @@ class IRrtStar:
             plt.show()
             #plt.close()
 
-            k_list_avg_neg = []
-            i_list_inc_10_avg_neg = []
-            k_list_avg_der_neg = []
-            i_list_inc_10_avg_der_neg = []
-            for index in range(len(k_list)):
-                if i_list_inc_10_avg[index] <= 0:
-                    k_list_avg_neg.append(k_list[index])
-                    i_list_inc_10_avg_neg.append(i_list_inc_10_avg[index])
-                if i_list_inc_10_avg_der[index] <= 0:
-                    k_list_avg_der_neg.append(k_list[index])
-                    i_list_inc_10_avg_der_neg.append(i_list_inc_10_avg_der[index])
+            k_list_avg_der_neg=[]
+            i_list_avg_der_neg=[]
+            k_list_avg_der2_neg = []
+            i_list_avg_der2_neg = []
+            for index in range(len(self.k_list)):
+                if self.i_list_avg_der[index]<=0:
+                    k_list_avg_der_neg.append(self.k_list[index])
+                    i_list_avg_der_neg.append(self.i_list_avg_der[index])
+                if self.i_list_avg_der2[index]<=0:
+                    k_list_avg_der2_neg.append(self.k_list[index])
+                    i_list_avg_der2_neg.append(self.i_list_avg_der2[index])
 
             fig, ax = plt.subplots(2, 2)
-            ax[0, 0].scatter(k_list, i_list, s=0.5)
+            ax[0, 0].scatter(self.k_list, self.i_list, s=0.5)
             ax[0, 0].set_title("Best node info")
-            ax[0, 1].scatter(k_list, i_list_10, s=0.5)
+            ax[0, 1].scatter(self.k_list, self.i_list_avg, s=0.5)
             ax[0, 1].set_title("10 best nodes info (avg)")
-            ax[1, 0].scatter(k_list, i_list_inc_10_avg, s=0.5)
-            ax[0].scatter(k_list_avg_neg, i_list_inc_10_avg_neg, s=0.5, c='r')
+            ax[1, 0].scatter(self.k_list, self.i_list_avg_der, s=0.5)
+            ax[1,0].scatter(k_list_avg_der_neg, i_list_avg_der_neg,s=0.5,c='r')
             ax[1, 0].set_title("10 best nodes info increase 10 it")
-            ax[1, 1].scatter(k_list, i_list_inc_10_avg_der, s=0.5)
+            ax[1, 1].scatter(self.k_list, self.i_list_avg_der2, s=0.5)
             ax[1, 1].set_title("10 best nodes info increase 10 der2")
+            # ax[3, 2].scatter(k_list, i_list_perc_10_avg_der)
+            # ax[3, 2].set_title("10 best nodes info increase % 10 der2")
+            # ax.legend(["Best node info","Best node increase","Best node increase %","10 nodes info","10 nodes increase","10 nodes increase %"])
+            # ax.grid()
             plt.show()
 
+
             fig, ax = plt.subplots(2, 1)
-            ax[0].scatter(k_list, i_list_inc_10_avg, s=0.5)
-            ax[0].scatter(k_list_avg_neg, i_list_inc_10_avg_neg, s=0.5, c='r')
+            ax[0].scatter(self.k_list, self.i_list_avg_der,s=0.5)
+            ax[0].scatter(k_list_avg_der_neg, i_list_avg_der_neg,s=0.5,c='r')
             ax[0].set_title("10 best nodes info increase 10 it")
             ax[0].grid()
-            ax[0].set_ylim((-0.05, 0.05))
-            ax[1].scatter(k_list, i_list_inc_10_avg_der, s=0.5)
-            ax[1].scatter(k_list_avg_der_neg, i_list_inc_10_avg_der_neg, s=0.5, c='r')
+            ax[0].set_ylim((-0.05,0.05))
+            ax[1].scatter(self.k_list, self.i_list_avg_der2,s=0.5)
+            ax[1].scatter(k_list_avg_der2_neg, i_list_avg_der2_neg,s=0.5,c='r')
             ax[1].set_title("10 best nodes info increase 10 der2")
             ax[1].grid()
-            ax[1].set_ylim((-0.05, 0.05))
+            ax[1].set_ylim((-0.05,0.05))
 
             plt.show()
 
@@ -547,8 +577,9 @@ class IRrtStar:
                 x_best=nodesecondround
                 [self.path, infopath] = self.ExtractPath(nodesecondround)
                 print("Executed path is round 2")
-
-        return self.path, infopathradius, x_best.totalcost, x_best.totalinfo, self.budget, self.step_len, self.search_radius, k, self.costmatrix
+        # final return
+        matrices= [self.costmatrix,self.anglematrix]
+        return self.path, infopathradius, x_best.totalcost, x_best.totalinfo, self.budget, self.step_len, self.search_radius, k, matrices, self.samplelocations
 
     def StopCriterion(self, k):
         stopcriterion = False
@@ -560,14 +591,17 @@ class IRrtStar:
 
         i_list_avg_cur = []
         # if len(self.X_soln)>=10:
-        avg_amount=10 # over how many nodes do we average (the best x nodes)
+        avg_amount=20 # over how many nodes do we average (the best x nodes)
         for i in range(1, min(avg_amount+1, len(info) + 1)):  # average over the 10 best nodes (or less if there are not 10 yet)
             # for i in range(int(np.ceil(len(self.X_soln)/10))): # average over the top 10% of nodes
             # self.x_best = max(info, key=info.get)
             i_list_avg_cur.append(info[sorted(info, key=info.get)[-i]])
         self.i_list_avg.append(sum(i_list_avg_cur) / len(i_list_avg_cur))
         # derivatives: #note that we use the derivative of the actual info values, not the increase
-        der_iterations = 25
+        if self.stopsetting=="mild":
+            der_iterations = 25
+        else:
+            der_iterations = 50
         prevnr = min(len(self.i_list_avg), der_iterations + 1)
         if prevnr < 2:
             self.i_list_avg_der.append(1)
@@ -685,12 +719,12 @@ class IRrtStar:
                 for gridpoint in infopath:
                     self.maze[gridpoint[1],gridpoint[0]]=0
                     #self.edgemaze[gridpoint[1],gridpoint[0]]=0
-                    width_path=2
-                    for i in range(width_path):
-                        self.maze[gridpoint[1], gridpoint[0]+(i+1)] = 0
-                        #self.edgemaze[gridpoint[1], gridpoint[0]+(i+1)] = 0
-                        self.maze[gridpoint[1], gridpoint[0] - (i + 1)] = 0
-                        #self.edgemaze[gridpoint[1], gridpoint[0] - (i + 1)] = 0
+                    path_width=2
+                    for i in range(path_width+1):
+                        self.maze[gridpoint[1], gridpoint[0] - (i)] = 0
+                        self.maze[gridpoint[1], gridpoint[0] + (i)] = 0
+                        #self.maze[gridpoint[1], gridpoint[0]+(i+1)] = 0
+                        #self.maze[gridpoint[1], gridpoint[0] - (i + 1)] = 0
 
             self.cost_right[index][index+1] = math.hypot(self.row_nrs[index + 1] - self.row_nrs[index],
                          self.row_edges[index + 1][1] - self.row_edges[index][1])  # note: this distance is not really in the y-direction, but from edge to edge point
@@ -709,14 +743,12 @@ class IRrtStar:
             if True: # for now
                 for gridpoint in infopath:
                     self.maze[gridpoint[1],gridpoint[0]]=0
-                    #self.edgemaze[gridpoint[1],gridpoint[0]]=0
 
-                    #width_path=2
-                    for i in range(width_path):
-                        self.maze[gridpoint[1], gridpoint[0]-(i+1)] = 0
-                        #self.edgemaze[gridpoint[1], gridpoint[0]-(i+1)] = 0
-                        self.maze[gridpoint[1], gridpoint[0] + (i + 1)] = 0
-                        #self.edgemaze[gridpoint[1], gridpoint[0] + (i + 1)] = 0
+                    for i in range(path_width):
+                        self.maze[gridpoint[1], gridpoint[0] + (i)] = 0
+                        self.maze[gridpoint[1], gridpoint[0] - (i)] = 0
+                        #self.maze[gridpoint[1], gridpoint[0]-(i+1)] = 0
+                        #self.maze[gridpoint[1], gridpoint[0] + (i + 1)] = 0
 
         for index1 in range(len(self.row_nrs)):
             for index2 in range(len(self.row_nrs)):
@@ -1021,7 +1053,6 @@ class IRrtStar:
                 # Make sure walkable terrain
                 # note: if .. continue means: if the statement returns true, we skip the rest of the loop
                 # two conditions: if the position is not within the rows/edges or if the position is changing in y position while it's not on "edge" terrain
-                # TODO: add condition (if... continue) back later
                 # if maze[node_position[1]][node_position[0]] != 0 or (new_position[1]!=0 and (edgemaze[node_position[1]][node_position[0]]!=0 or edgemaze[current_node.position[1]][current_node.position[0]]!=0)): #or (node_position[0]==end[0] and node_position[1]==end[1])
                 #     continue
 
@@ -1497,7 +1528,7 @@ class IRrtStar:
             #print(node.parent.parent.x, node.parent.parent.y)
 
             checked_locations = []
-            for x_near in self.Near(self.V, node, self.search_radius):
+            for x_near in self.Near(self.V, node, self.search_radius,False):
                 # for x_near in self.Near(self.V, node, 10):
                 if not ([x_near.x,x_near.y]==[node.x,node.y]) and not ([x_near.x,x_near.y] in checked_locations) and not ([node.parent.x,node.parent.x]==[self.x_goal.x,self.x_goal.y]):
                     checked_locations.append([x_near.x, x_near.y])
@@ -1689,9 +1720,9 @@ class IRrtStar:
                         if allnode.parent == node1:  # in this case we can't prune the node because other nodes depend on it
                             nochildren = False
                             print("!!!Node not pruned because it has children")
-                            break;
+                            break
                     if nochildren:
-                        if node1 in self.V: #still have to figure out why this is needed (TODO)
+                        if node1 in self.V:
                             self.V.remove(node1)
                         if node1 in self.X_soln:
                             self.X_soln.remove(node1)  # also from the solutions
@@ -1866,13 +1897,10 @@ class IRrtStar:
         return Node((int(xpoint),int(ypoint)))
 
 
-    def Near(self, nodelist, node,max_dist=0):
+    def Near(self, nodelist, node,max_dist=0,reduction=True):
         timestart=time.time()
         if max_dist==0:
             max_dist = self.step_len
-        if max_dist==self.step_len or max_dist==self.search_radius:
-            max_dist-=self.reduction
-        #max_dist-=self.reduction
         #heuristic:
         nodelist_new = nodelist[:]
         for nd in nodelist: #TODO check if this actually speeds things up
@@ -1884,14 +1912,12 @@ class IRrtStar:
         #print("number of near nodes: "+str(len(X_near)))
         timeend = time.time()
         self.time[3] += (timeend - timestart)
-        if len(X_near)>500 and max_dist>=5:
-            self.reductioncount+=1
-            #print("Shortening the range for Near: "+str(max_dist-1))
-            if self.reductioncount==1000:
-                self.reductioncount=0
-                self.reduction+=1
-                print("Range is reducted by "+str(self.reduction))
-            return self.Near(nodelist,node,max_dist-1)
+        if len(X_near)>500 and max_dist>=5 and reduction:
+            X_near_reducted = self.Near(nodelist, node, max_dist - 1)
+            if len(X_near_reducted) > 0:
+                return X_near_reducted
+            else:
+                return X_near
         return X_near
 
 
@@ -2035,10 +2061,18 @@ class IRrtStar:
         return C
 
     #@staticmethod
-    def Nearest(self,nodelist, n):
+    def Nearest(self,nodelist, node):
         #return nodelist[int(np.argmin([(nd.x - n.x) ** 2 + (nd.y - n.y) ** 2
         #                               for nd in nodelist]))]
-        return nodelist[int(np.argmin([self.FindCostInfoA(n.x, n.y, nd.x, nd.y, nd, False, True) for nd in nodelist]))]
+
+        nodelist_new = nodelist[:]
+        for nd in nodelist: #TODO check if this actually speeds things up
+            if (nd.x-node.x)**2>self.step_len**2 and (nd.y-node.y)**2>self.step_len**2:
+                nodelist_new.remove(nd)
+        if len(nodelist_new)==0:
+            return nodelist[int(np.argmin(
+                [self.FindCostInfoA(node.x, node.y, nd.x, nd.y, nd, False, True) for nd in nodelist]))]
+        return nodelist_new[int(np.argmin([self.FindCostInfoA(node.x, node.y, nd.x, nd.y, nd, False, True) for nd in nodelist_new]))]
 
     def LastPath(self, node):
         # new with kinematics stuff
@@ -2248,15 +2282,19 @@ class IRrtStar:
 
 
 
-def main(uncertaintymatrix,row_nrs,row_edges,field_vertex,scenario,costmatrix=None):
+def main(uncertaintymatrix,row_nrs,row_edges,field_vertex,scenario=None,matrices=None,samplelocations=None):
     x_start = (50, 48)  # Starting node
     #x_goal = (37, 18)  # Goal node
     x_goal = (50,48)
+    # scenario = [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
+    if scenario:
+        rrt_star = IRrtStar(x_start, x_goal, scenario[4], 0.0, scenario[5], 2000, uncertaintymatrix, row_nrs,row_edges,field_vertex,scenario, matrices,
+                            samplelocations)
+    else:
+        rrt_star = IRrtStar(x_start, x_goal, 100, 0.0, 15, 2000,uncertaintymatrix,row_nrs,row_edges,field_vertex,scenario,matrices,samplelocations)
+    [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,matrices,samplelocations]=rrt_star.planning()
 
-    rrt_star = IRrtStar(x_start, x_goal, 100, 0.0, 15, 2000,uncertaintymatrix,row_nrs,row_edges,field_vertex,scenario,costmatrix)
-    [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,costmatrix]=rrt_star.planning()
-
-    return finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration, costmatrix
+    return finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration, matrices,samplelocations
 
 
 if __name__ == '__main__':

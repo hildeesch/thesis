@@ -90,14 +90,14 @@ def showpathlong(day,total_days,fig,ax,uncertaintymatrix, path, cost, info,budge
         if show:
             plt.show()
     return fig,ax
-def updatematrix(disease,plantmatrix,spreadmatrix,worldmodel,uncertaintymatrix,infopath, sensoruncertainty=0, show=False):
+def updatematrix(disease,plantmatrix,spreadmatrix,worldmodel,uncertaintymatrix,infopath, sensoruncertainty=0,dailyuncertainty=0, reproductionrate=None,show=False):
     # disease = pathogen or weed
     saturation=disease.saturation
     # spreadmatrix = reality (ground truth on the spread of the pathogens/weeds) (= just for simulation purposes)
     # worldmodel = spreadmatrix that we know of
     # sensoruncertainty = uncertainty in monitoring, value between 0 (= no uncertainty) and 1 (monitoring gives no info at all)
     #   this uncertainty represents the standard deviation (STD) relative to the actual value
-    dailyuncertainty=0.01 # how much the uncertainty rises (across the entire matrix) each day
+    #dailyuncertainty=0.01 # how much the uncertainty rises (across the entire matrix) each day
 
     uncertaintymatrixnew = deepcopy(uncertaintymatrix)
     worldmodelnew= deepcopy(worldmodel)
@@ -105,9 +105,9 @@ def updatematrix(disease,plantmatrix,spreadmatrix,worldmodel,uncertaintymatrix,i
         worldmodelnew[cell[1],cell[0]]=np.random.normal(spreadmatrix[cell[1],cell[0]], spreadmatrix[cell[1],cell[0]]*sensoruncertainty) # updating the worldmodel with the monitored data
 
     if disease.type=="pathogen":
-        [spreadnew,worldmodelnew,uncertaintymatrixupdate]=pathogenupdate(disease,plantmatrix,spreadmatrix,worldmodelnew)
+        [spreadnew,worldmodelnew,uncertaintymatrixupdate]=pathogenupdate(disease,plantmatrix,spreadmatrix,worldmodelnew,reproductionrate)
     else:
-        [spreadnew,worldmodelnew,uncertaintymatrixupdate]=weedsupdate(disease,plantmatrix,spreadmatrix,worldmodelnew)
+        [spreadnew,worldmodelnew,uncertaintymatrixupdate]=weedsupdate(disease,plantmatrix,spreadmatrix,worldmodelnew,reproductionrate)
 
     for row in range(100):
         for col in range(100):

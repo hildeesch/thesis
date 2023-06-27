@@ -7,7 +7,7 @@ from copy import deepcopy
 from shapely.geometry import Point, Polygon
 
 
-def show_map(matrix):
+def show_map(matrix,show=True,save=False,path="",name="/new_picture"):
     fig, ax = plt.subplots()
     colormap = cm.Greys
     colormap.set_bad(color='black')
@@ -15,7 +15,10 @@ def show_map(matrix):
 
     ax.set_title("Heatmap visualization")
     fig.tight_layout()
-    plt.show()
+    if show:
+        plt.show()
+    if save:
+        plt.savefig(path+name)
 
 # plantdist: 1 = plant in every row/column, 2= one distance between them, etc.
 def withrows(matrix,plantdist,rowdist,field_vertex,show=True):
@@ -36,22 +39,23 @@ def withrows(matrix,plantdist,rowdist,field_vertex,show=True):
         right=None
         for columns in range(0,100):
             #if matrix[rows,columns]==0.5:
-            if not (np.isnan(matrix[rows,columns]) and np.isnan(matrix[rows,columns-1])) and not (not np.isnan(matrix[rows,columns]) and not np.isnan(matrix[rows,columns-1])):
+            #if not (np.isnan(matrix[rows,columns]) and np.isnan(matrix[rows,columns-1])) and not (not np.isnan(matrix[rows,columns]) and not np.isnan(matrix[rows,columns-1])):
+            if not np.isnan(matrix[rows,columns]) and np.isnan(matrix[rows,columns-1]):
                 if left ==None:
                     left=columns
                     # change the plant matrix to incorporate the width around the edges of rows to drive in (remove plants)
                     for i in range(path_width+1):
-                        if left-(i+1)>=0:
-                            heatmatrix[rows,left+(i)]=0
+                        #if left-(i+1)>=0:
+                        heatmatrix[rows,left+(i)]=0
                             #edgematrix[rows,left-(i)]=0
-
-                elif right==None:
-                    #right=columns
-                    right=columns-1
-                    for i in range(path_width+1):
-                        if right+(i+1)<100:
-                            heatmatrix[rows,right-(i)]=0
-                            #edgematrix[rows,right+(i)]=0
+            if np.isnan(matrix[rows, columns]) and not np.isnan(matrix[rows, columns - 1]):
+                #elif right==None:
+                #right=columns
+                right=columns-1
+        for i in range(path_width+1):
+            #if right+(i+1)<100:
+            heatmatrix[rows,right-(i)]=0
+                #edgematrix[rows,right+(i)]=0
 
         edgematrix[rows,left]=0.5
         edgematrix[rows,right]=0.5
@@ -135,26 +139,29 @@ def norows(matrix,density,show=True):
     return heatmatrix
 
 def polygon(shape,show=True):
-    if shape == "rectangle":
+    if shape == "rectangle" or shape == "rectangle_obstacle":
         # Create Point objects
-        p1 = (0, 0)
-        p2 = (0,99)
-        p3 = (99, 99)
-        p4 = (99,0)
+        p1 = (4, 4)
+        p2 = (4,95)
+        p3 = (95, 95)
+        p4 = (95,4)
 
         # Create a Polygon
         coords = [p1,p2,p3,p4]
 
-    if shape == "hexagon":
+
+    if shape == "hexagon_convex":
         # Create Point objects
         # convex:
-        # p1 = (20, 0)
-        # p2 = (0,50)
-        # p3 = (20,99)
-        # p4 = (79, 90)
-        # p5 = (99,50)
-        # p6 = (79,0)
+        p1 = (20, 4)
+        p2 = (4,50)
+        p3 = (20,97)
+        p4 = (79, 90)
+        p5 = (97,50)
+        p6 = (79,4)
+        coords = [p1,p2,p3,p4,p5,p6]
 
+    if shape== "hexagon_small":
         # convex small
         p1 = (40, 30) #(x,y)
         p2 = (20,50)
@@ -162,22 +169,26 @@ def polygon(shape,show=True):
         p4 = (69, 70)
         p5 = (79,50)
         p6 = (59,30)
+        coords = [p1,p2,p3,p4,p5,p6]
 
+    if shape== "hexagon_concave":
         # concave:
-        # p1 = (20, 0)
-        # p2 = (40,50)
-        # p3 = (20,99)
-        # p4 = (79, 90)
-        # p5 = (69,50)
-        # p6 = (79,0)
+        p1 = (10, 4)
+        p2 = (20,50)
+        p3 = (10,95)
+        p4 = (79, 90)
+        p5 = (69,50)
+        p6 = (79,4)
+        coords = [p1,p2,p3,p4,p5,p6]
 
+    if shape== "hexagon_concave_small":
         # concave small
-        # p1 = (20, 25)
-        # p2 = (40,50)
-        # p3 = (20,79)
-        # p4 = (79, 70)
-        # p5 = (69,50)
-        # p6 = (79,25)
+        p1 = (20, 25)
+        p2 = (40,50)
+        p3 = (20,79)
+        p4 = (79, 70)
+        p5 = (69,50)
+        p6 = (79,25)
 
         # Create a Polygon
         coords = [p1,p2,p3,p4,p5,p6]
@@ -193,7 +204,8 @@ def polygon(shape,show=True):
     #             matrix[row,column] = 0.5
 
     # obstacle:
-    #matrix[30:40,45:60] = np.nan
+    if shape == "rectangle_obstacle":
+        matrix[30:40,45:60] = np.nan
 
     if show:
         show_map(matrix)

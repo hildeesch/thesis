@@ -46,7 +46,7 @@ class Node:
 
 class IRrtStar:
     def __init__(self, x_start, x_goal, step_len,
-                 goal_sample_rate, search_radius, iter_max,uncertaintymatrix,scenario=1,costmatrix=None):
+                 goal_sample_rate, search_radius, iter_max,uncertaintymatrix,scenario,matrices,samplelocations):
         self.x_start = Node(x_start)
         self.x_goal = Node(x_goal)
         self.step_len = step_len
@@ -58,7 +58,7 @@ class IRrtStar:
         self.plotting = plotting.Plotting(x_start, x_goal)
         self.utils = utils.Utils(uncertaintymatrix)
 
-        self.fig, self.ax = plt.subplots()
+        #self.fig, self.ax = plt.subplots()
         self.delta = self.utils.delta
         self.x_range = self.env.x_range
         self.y_range = self.env.y_range
@@ -71,13 +71,26 @@ class IRrtStar:
         self.X_soln = []
         self.path = None
 
-        self.reductioncount = 0 # to count the shortening of range in Near()
-        self.reduction = 0
-
         self.inforadius = 0 # monitor radius around the robot (0 = no radius, so only at the location of the robot)
 
-        self.budget=200
-        self.scenario=scenario
+        # scenario = [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
+        if scenario:
+            self.budget = scenario[1]
+            self.boolrewiring=scenario[3]
+            self.stopsetting=scenario[6]
+            self.doubleround=scenario[7]
+        else:
+            self.budget=200
+            self.boolrewiring=True
+            self.stopsetting="mild"
+            self.doubleround=False
+        #self.scenario=scenario
+        self.samplelocations=samplelocations
+        self.samplelocations_add=False
+        if not samplelocations:
+            self.samplelocations=[]
+            self.samplelocations_add=True
+
         self.kinematic = "none" # kinematic constraint
         # choices: "none", "dubins", "reedsshepprev", "reedsshepp", "ranger", "limit"
         if self.kinematic == "ranger" or self.kinematic=="limit":
@@ -99,19 +112,26 @@ class IRrtStar:
         if self.kinematic=="dubins" or self.kinematic=="reedsshepp" or self.kinematic=="reedsshepprev":
             print("dubins/ reedsshepp")
             self.costmatrix=None
+            self.infopathmatrix=None
             # self.costmatrix = np.empty((100 * 100 * 8, 100 * 100))
             # self.anglematrix = np.empty((100 * 100 * 8, 100 * 100))
             # self.infopathmatrix = np.empty((100 * 100 * 8, 100 * 100), dtype=object)
             # self.infomatrix = np.empty((100 * 100 * 8, 100 * 100))
             self.anglematrix = np.empty((100 * 100, 100 * 100))
         else:
-            if costmatrix is None:
-                self.costmatrix = np.empty((100 * 100, 100 * 100))
-            else:
-                self.costmatrix=costmatrix
-            self.anglematrix = np.empty((100 * 100, 100 * 100))
             self.infopathmatrix = np.empty((100 * 100, 100 * 100), dtype=object)
             self.infomatrix = np.empty((100 * 100, 100 * 100))
+            if matrices is None:
+                self.costmatrix = np.empty((100 * 100, 100 * 100))
+                # self.infopathmatrix = np.empty((100 * 100, 100 * 100), dtype=object)
+                # self.infomatrix = np.empty((100 * 100, 100 * 100))
+                self.anglematrix = np.empty((100 * 100, 100 * 100))
+
+            else:
+                self.costmatrix = matrices[0]
+                # self.infopathmatrix = matrices[1]
+                # self.infomatrix = matrices[2]
+                self.anglematrix=matrices[1]
 
         self.time = np.zeros(8) # for debugging
         # 0 = sample, 1 = nearest, 2 = steer, 3 = near, 4 = rewiring, 5 = lastpath, 6 = pruning, 7 = totaltime
@@ -128,14 +148,14 @@ class IRrtStar:
         return x_best
 
     def planning(self):
-        show = True
-        doubleround=False # whether we want to plan a double path (true) or single path (false)
+        show = False
+        doubleround=self.doubleround # whether we want to plan a double path (true) or single path (false)
         rewiringafter=False
         #theta, dist, x_center, C, x_best = self.init()
         totalstarttime=time.time()
 
         self.x_best = self.init()
-        x_best = self.init()
+        x_best = self.x_best
         c_best = np.inf
         i_best = 0.001
 
@@ -165,17 +185,6 @@ class IRrtStar:
         #count_down=20
         startlen=0 # for checking node increase
 
-        k_list=[]
-        i_list=[]
-        i_list_perc=[]
-        i_list_inc=[]
-        i_list_10=[]
-        i_list_perc_10=[]
-        i_list_inc_10=[]
-        i_list_perc_10_avg=[] # first derivative ("speed")
-        i_list_inc_10_avg=[] # first derivative
-        i_list_perc_10_avg_der = [] # second derivative ("acceleration")
-        i_list_inc_10_avg_der = [] # second derivative
         k=0
         stopcriterion=False
         iter_min = 200
@@ -196,6 +205,9 @@ class IRrtStar:
                     i_best = info[x_best]
 
                     stopcriterion = self.StopCriterion(k)
+                    if stopcriterion:
+                        print("Stop criterion = True at it. "+str(k))
+                        stopcriterion=False
 
                     #print("i_best: "+str(i_best)+" i_last_best: "+str(i_last_best)+" Criterion value: "+str(((i_best-i_last_best)*100/i_last_best)))
                     # if ((i_best-i_last_best)/i_last_best)<0.001: #smaller than 1% improvement
@@ -203,7 +215,7 @@ class IRrtStar:
                     # else:
                     #     count_down=20 #reset
                     #     print("reset countdown")
-            if k==401: # to test up to certain iteration
+            if k==601: # to test up to certain iteration
                 #count_down=0
                 stopcriterion=True
             # if count_down<=0:
@@ -222,7 +234,13 @@ class IRrtStar:
             startlen = len(self.V)
 
             timestart=time.time()
-            x_rand = self.SampleFreeSpace()
+            if self.samplelocations_add:
+                x_rand = self.SampleFreeSpace()
+                self.samplelocations.append(x_rand)
+            else:
+                x_rand=self.samplelocations[k]
+                if double: # otherwise we keep trying the same location again and again
+                    x_rand = self.SampleFreeSpace()
             timeend=time.time()
             self.time[0]+=(timeend-timestart)
             timestart=time.time()
@@ -242,6 +260,8 @@ class IRrtStar:
                     double=True #there is already a node at this location, so we skip it
                     print("double")
                     k-=1
+                    if self.samplelocations_add:
+                        self.samplelocations.pop()
                     break
             #if x_nearest.cost + self.Line(x_nearest, x_new) + self.Line(x_new, self.x_goal) < self.budget and not double:  # budget check for nearest parent (to make it more efficient)
             if not double:  # budget check for nearest parent (to make it more efficient)
@@ -330,7 +350,7 @@ class IRrtStar:
         #end of doubleroundstrategy indent
 
         # Rewiring in Hindsight:
-        if rewiringafter or not doubleround:
+        if rewiringafter or not doubleround and self.boolrewiring:
             info = {node: node.totalinfo for node in self.X_soln}
             for i in range(10):  # rewire the 10 best nodes
                 # self.x_best = max(info, key=info.get)
@@ -341,7 +361,7 @@ class IRrtStar:
             self.x_best = max(info, key=info.get)
             x_best = max(info, key=info.get)
             print("Best node after rewiring: tot. info: " + str(x_best.totalinfo) + " Cost: " + str(x_best.totalcost))
-        if doubleround and not rewiringafter:
+        if doubleround and not rewiringafter and self.boolrewiring:
             doubleround=False # to make sure it rewires in the correct way
             top20nodes=[] #top 10 nodes split in two rounds each
             info = {node: node.totalinfo for node in self.X_soln}
@@ -613,8 +633,9 @@ class IRrtStar:
             #         infopathsecondcheck.append(cell)
             #         infosecondcheck+=self.uncertaintymatrix[cell[1],cell[0]]
             # print("Second info check = "+str(infosecondcheck))
-
-        return self.path, infopath, x_best.totalcost, x_best.totalinfo, self.budget, self.step_len, self.search_radius, k, self.costmatrix
+        # final return
+        matrices= [self.costmatrix,self.anglematrix]
+        return self.path, infopath, x_best.totalcost, x_best.totalinfo, self.budget, self.step_len, self.search_radius, k, matrices, self.samplelocations
     def StopCriterion(self,k):
         stopcriterion=False
         #self.StopCriterion(k_list, i_list, i_list_avg, i_list_avg_der, i_list_avg_der2)
@@ -632,7 +653,10 @@ class IRrtStar:
             i_list_avg_cur.append(info[sorted(info, key=info.get)[-i]])
         self.i_list_avg.append(sum(i_list_avg_cur) / len(i_list_avg_cur))
         # derivatives: #note that we use the derivative of the actual info values, not the increase
-        der_iterations=25
+        if self.stopsetting=="mild":
+            der_iterations = 25
+        else:
+            der_iterations = 50
         prevnr = min(len(self.i_list_avg), der_iterations+1)
         if prevnr < 2:
             self.i_list_avg_der.append(1)
@@ -894,7 +918,7 @@ class IRrtStar:
             # print(len(bestpath))
 
             #for x_near in self.Near(self.V, node, self.search_radius):
-            for x_near in self.Near(self.V, node, 10):
+            for x_near in self.Near(self.V, node, self.search_radius,False):
                 x_temp = Node((node.x, node.y))
                 x_temp.parent = node.parent
                 x_temp.info = node.info
@@ -1078,8 +1102,7 @@ class IRrtStar:
             checked_locations=[]
 
 
-            self.reduction=0 # reset the reduction of the search_radius for Near()
-            for x_near in self.Near(self.V, node, self.search_radius):
+            for x_near in self.Near(self.V, node, self.search_radius,False):
             #for x_near in self.Near(self.V, node, 10):
                 if not ([x_near.x,x_near.y]==[node.x,node.y]) and not ([x_near.x,x_near.y] in checked_locations) and not ([node.parent.x,node.parent.x]==[self.x_goal.x,self.x_goal.y]):
                     checked_locations.append([x_near.x,x_near.y])
@@ -1254,13 +1277,13 @@ class IRrtStar:
 
     def Steer(self, x_start, x_goal):
         dist, theta = self.get_distance_and_angle(x_start, x_goal)
-        dist = min(self.step_len-self.reduction, dist)
+        dist = min(self.step_len, dist)
         notfinished=True
         while notfinished and dist>=0:
             xpos = min(99,(math.floor(x_start.x + dist * math.cos(theta))))
             ypos = min(99,(math.floor(x_start.y + dist * math.sin(theta))))
             node_new = Node((xpos,ypos))
-            if not np.isnan(self.uncertaintymatrix[node_new.y,node_new.x]) and self.get_distance_and_angle(x_start,node_new)[0]<=(self.step_len-self.reduction):
+            if not np.isnan(self.uncertaintymatrix[node_new.y,node_new.x]) and self.get_distance_and_angle(x_start,node_new)[0]<=(self.step_len):
                 dist = self.Line(x_start,node_new)
                 notfinished=False # to prevent sampling in obstacle and sampling too far due to rounding
             dist-=1
@@ -1273,25 +1296,16 @@ class IRrtStar:
         print("nearest=("+str(x_start.x)+","+str(x_start.y)+") - x_rand=("+str(x_goal.x)+","+str(x_goal.y)+") - dist = "+str(dist+1)+" - x_new=("+str(node_new.x)+","+str(node_new.y)+")")
         return node_new
 
-    def Near(self, nodelist, node, max_dist=0):
+    def Near(self, nodelist, node, max_dist=0, reduction=True):
         timestart=time.time()
         if max_dist==0:
             max_dist = self.step_len
-        if max_dist==self.step_len or max_dist==self.search_radius:
-            max_dist-=self.reduction
         dist_table = [self.get_distance_and_angle(nd,node)[0] for nd in nodelist]
         X_near = [nodelist[ind] for ind in range(len(dist_table)) if (dist_table[ind] <= max_dist and dist_table[ind] > 0.0)]
         timeend = time.time()
         self.time[3] += (timeend - timestart)
         limit = 500
-        if len(X_near)>limit and max_dist>=5:
-            self.reductioncount+=1
-            #print("Shortening the range for Near: "+str(max_dist-1))
-            #print("Current step length ="+str(self.step_len-self.reduction))
-            if self.reductioncount==1000 and (self.step_len-self.reduction>=5):
-                self.reductioncount=0
-                self.reduction+=1
-                print("Range is reducted by "+str(self.reduction))
+        if len(X_near)>limit and max_dist>=5 and reduction: # if it returns many results, we decrease the radius (when reduction is set to True)
             X_near_reducted = self.Near(nodelist,node,max_dist-1)
             if len(X_near_reducted)>0:
                 return X_near_reducted
@@ -1806,15 +1820,18 @@ class IRrtStar:
 
 
 
-def main(uncertaintymatrix,scenario=1,costmatrix=None):
+def main(uncertaintymatrix,scenario=None,matrices=None,samplelocations=None):
     x_start = (50, 50)  # Starting node
     #x_goal = (37, 18)  # Goal node
     x_goal = (50,50)
+    # scenario = [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
+    if scenario:
+        rrt_star = IRrtStar(x_start, x_goal, scenario[4], 0.0, scenario[5], 2000, uncertaintymatrix, scenario, matrices, samplelocations)
+    else:
+        rrt_star = IRrtStar(x_start, x_goal, 15, 0.0, 15, 2000,uncertaintymatrix,scenario,matrices,samplelocations)
+    [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,matrices,samplelocations]=rrt_star.planning()
 
-    rrt_star = IRrtStar(x_start, x_goal, 15, 0.0, 15, 2000,uncertaintymatrix,scenario,costmatrix)
-    [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,costmatrix]=rrt_star.planning()
-
-    return finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration, costmatrix
+    return finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration, matrices,samplelocations
 
 
 if __name__ == '__main__':
