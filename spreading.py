@@ -54,7 +54,7 @@ def weedsspread(matrixstructure,matrixplants,weed,show=True):
         fig, ax = plt.subplots()
         colormap = cm.Oranges
         colormap.set_bad(color='black')
-        im = ax.imshow(weedmatrix, colormap, vmin=0, vmax=saturation, origin='lower')
+        im = ax.imshow(weedmatrix, colormap, vmin=0, vmax=saturation, origin='lower',extent=[0, 100, 0, 100])
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
 
@@ -156,7 +156,7 @@ def uncertaintyweeds(matrixstructure,matrixplants,matrixweeds,weed,show=True):
         fig, ax = plt.subplots()
         colormap = cm.Blues
         colormap.set_bad(color='black')
-        im = ax.imshow(uncertaintymatrix, colormap, vmin=0, vmax=1, origin='lower')
+        im = ax.imshow(uncertaintymatrix, colormap, vmin=0, vmax=1, origin='lower',extent=[0, 100, 0, 100])
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
 
@@ -435,7 +435,7 @@ def pathogenspread(matrixstructure,matrixplants,pathogen,show=True):
         fig, ax = plt.subplots()
         colormap = cm.Oranges
         colormap.set_bad(color='black')
-        im = ax.imshow(pathogenmatrix, colormap, vmin=0, vmax=saturation, origin='lower')
+        im = ax.imshow(pathogenmatrix, colormap, vmin=0, vmax=saturation, origin='lower',extent=[0, 100, 0, 100])
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
 
@@ -521,7 +521,7 @@ def uncertaintypathogen(matrixstructure,matrixplants,matrixpathogen,pathogen,sho
         fig, ax = plt.subplots()
         colormap = cm.Blues
         colormap.set_bad(color='black')
-        im= ax.imshow(uncertaintymatrix, colormap, vmin=0, vmax=1, origin='lower')
+        im= ax.imshow(uncertaintymatrix, colormap, vmin=0, vmax=1, origin='lower',extent=[0, 100, 0, 100])
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
 

@@ -240,13 +240,14 @@ def prepandtest():
                         ["nonconvex", False, "pathogen1"], ["nonconvex", False, "pathogen2"],
                         ["nonconvex", True, "weed1"], ["nonconvex", True, "weed2"],
                         ["obstacle", False, "pathogen1"], ["obstacle", False, "pathogen2"], ["obstacle", True, "weed1"],
-                        ["obstacle", True, "weed2"]]
+                        ["obstacle", True, "weed2"], ["rectangle", False, "pathogen1"]]
     # variant = [field, weedbool, weed/pathogen type]
     preparing = True
     if preparing:
         # variant = [field, weedbool, weed/pathogen type]
         for rowsbool in [True,False]:
-           for variant in scenariovariants:
+           #for variant in scenariovariants:
+           for variant in scenariovariants[-1]:
                # Choose the field shape:
                # Receive: field_matrix, field_vertex
                if variant[0]=="convex":
@@ -255,6 +256,8 @@ def prepandtest():
                    [field_matrix,field_vertex] = polygon("hexagon_concave",False)
                elif variant[0]=="obstacle":
                    [field_matrix,field_vertex] = polygon("rectangle_obstacle",False)
+               elif variant[0]=="rectangle":
+                   [field_matrix,field_vertex] = polygon("rectangle",False)
 
                # Define the plant locations
                # Receive plant_matrix, row_nrs, row_edges
@@ -373,7 +376,9 @@ def prepandtest():
 
             # variant = [field, weedbool, weed/pathogen type]
             rowsbool = scenariosettings[0]
-            for variant in scenariovariants:
+            #for variant in scenariovariants:
+            for variant in scenariovariants[-1]:
+
                 if rowsbool:
                     pathname = str("Testing_files/rows/")+str(variant[0])+str(variant[2])
                 else:
@@ -430,12 +435,12 @@ def prepandtest():
                             np.save(pathname + '/iteration_'+str(day)+'.npy', iteration)
                             np.save(pathname + '/runtime_'+str(day)+'.npy', totaltime)
 
-                            np.save(pathname + '/spread_matrix.npy', spread_matrix)
-                            np.save(pathname + '/worldmodel_matrix.npy', worldmodel_matrix)
-                            np.save(pathname + '/uncertainty_matrix.npy', uncertainty_matrix)
-                            show_map(spread_matrix, False, True, pathname, "/spread_matrix")
-                            show_map(worldmodel_matrix, False, True, pathname, "/worldmodel_matrix")
-                            show_map(uncertainty_matrix, False, True, pathname, "/uncertainty_matrix")
+                            np.save(pathname + '/spread_matrix_'+str(day)+'.npy', spread_matrix)
+                            np.save(pathname + '/worldmodel_matrix_'+str(day)+'.npy', worldmodel_matrix)
+                            np.save(pathname + '/uncertainty_matrix_'+str(day)+'.npy', uncertainty_matrix)
+                            show_map(spread_matrix, False, True, pathname, "/spread_matrix_"+str(day))
+                            show_map(worldmodel_matrix, False, True, pathname, "/worldmodel_matrix"+str(day))
+                            show_map(uncertainty_matrix, False, True, pathname, "/uncertainty_matrix"+str(day))
 
                             disease = getDisease(variant[2])
                             [spread_matrix, worldmodel_matrix, uncertainty_matrix] = updatematrix(
@@ -475,12 +480,13 @@ def default():
 
     # Choose the field shape:
     #[field_matrix,field_vertex] = polygon("hexagon_small",True)
-    [field_matrix,field_vertex] = polygon("hexagon_convex",True)
+    [field_matrix,field_vertex] = polygon("rectangle",False)
+    #[field_matrix,field_vertex] = polygon("hexagon_convex",False)
     #[field_matrix,field_vertex] = polygon("hexagon_concave",True)
     #[field_matrix,field_vertex] = polygon("rectangle_obstacle",True)
-    rowsbool = True
+    rowsbool = False
     if rowsbool:
-        [plant_matrix,row_nrs,row_edges,field_vertex] = withrows(field_matrix,2,1,field_vertex,True)
+        [plant_matrix,row_nrs,row_edges,field_vertex] = withrows(field_matrix,2,1,field_vertex,False)
 
     else:
         plant_matrix = norows(field_matrix,2,False)
@@ -491,7 +497,7 @@ def default():
         # more aggressive
         pathogen1 = Pathogen(patchnr=3,infectionduration=4,spreadrange=5, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.3, saturation=5)
         # two patches
-        pathogen1 = Pathogen(patchnr=2,infectionduration=4,spreadrange=3, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.3, saturation=5)
+        pathogen1 = Pathogen(patchnr=2,infectionduration=6,spreadrange=3, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.3, saturation=5)
         # one patch:
         #pathogen1 = Pathogen(patchnr=1,infectionduration=6,spreadrange=6, reproductionfraction=0.5, reproductionrate=2, standarddeviation=0.1, saturation=3) # one big patch
 
@@ -534,15 +540,16 @@ def default():
     print(np.nansum(uncertainty_matrix))
     #scenario = 1
     #rig(uncertainty_matrix)
-    total_days=10
-    costmatrix=None #initialize for first day
+    total_days=1
+    matrices=None #initialize for first day
     scenariosettings=None
     for day in range(1,total_days+1):
         if rowsbool:
-            [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,costmatrix] = rig_rows_matrix(
-                uncertainty_matrix, row_nrs, row_edges, field_vertex,scenariosettings,costmatrix)
+            [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,matrices,samplelocations] = rig_rows_matrix(
+                uncertainty_matrix, row_nrs, row_edges, field_vertex,scenariosettings,matrices)
         else:
-            [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,costmatrix] = rig_matrix(uncertainty_matrix,scenariosettings,costmatrix)
+            [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
+                            matrices,samplelocations] = rig_matrix(uncertainty_matrix,scenariosettings,matrices)
 
         # Set the sensor uncertainty and update the world model for the next day:
         sensoruncertainty=0

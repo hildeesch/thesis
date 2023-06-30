@@ -92,7 +92,6 @@ class IRrtStar:
         # for stopping criterion:
         self.k_list, self.i_list, self.i_list_avg, self.i_list_avg_der, self.i_list_avg_der2 = [], [], [], [], []
 
-        self.budget=300
         self.inforadius=0
         self.scenario = scenario
         self.samplelocations = samplelocations
@@ -103,12 +102,14 @@ class IRrtStar:
         # scenario = [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
         if scenario:
             self.budget = scenario[1]
-            self.boolrewiring = scenario[3]
-            self.stopsetting = scenario[6]
+            self.boolrewiring=scenario[3]
+            self.stopsetting=scenario[6]
+            self.doubleround=scenario[7]
         else:
-            self.budget = 500
-            self.boolrewiring = True
-            self.stopsetting = "mild"
+            self.budget=500
+            self.boolrewiring=True
+            self.stopsetting="mild"
+            self.doubleround=False
 
         self.kinematic = "none"  # kinematic constraint
         # choices: "none", "dubins", "reedsshepprev", "reedsshepp", "ranger", "limit"
@@ -267,7 +268,7 @@ class IRrtStar:
                     # else:
                     #     count_down=20 #reset
                     #     print("Reset countdown")
-            if k==301: # to test up to certain iteration
+            if k==601: # to test up to certain iteration
                 #count_down=0
                 stopcriterion=True
             #if count_down<=0 and (k>200 or k>(self.iter_max-3)):
@@ -1898,21 +1899,17 @@ class IRrtStar:
 
 
     def Near(self, nodelist, node,max_dist=0,reduction=True):
-        timestart=time.time()
         if max_dist==0:
             max_dist = self.step_len
-        #heuristic:
-        nodelist_new = nodelist[:]
-        for nd in nodelist: #TODO check if this actually speeds things up
-            if (nd.x-node.x)**2>max_dist**2 and (nd.y-node.y)**2>max_dist**2:
-                nodelist_new.remove(nd)
-        #actual calculation
+        timestart=time.time()
         dist_table = [self.FindCostInfoA(node.x, node.y, nd.x, nd.y, nd, False, True) for nd in nodelist]
-        X_near = [nodelist[ind] for ind in range(len(dist_table)) if (dist_table[ind] <= max_dist and dist_table[ind] > 0.0)]
-        #print("number of near nodes: "+str(len(X_near)))
+        X_near = [nodelist[ind] for ind in range(len(dist_table)) if
+                  (dist_table[ind] <= max_dist and dist_table[ind] > 0.0)]
+        # print("number of near nodes: "+str(len(X_near)))
         timeend = time.time()
         self.time[3] += (timeend - timestart)
-        if len(X_near)>500 and max_dist>=5 and reduction:
+
+        if len(X_near) > 500 and max_dist >= 5 and reduction:
             X_near_reducted = self.Near(nodelist, node, max_dist - 1)
             if len(X_near_reducted) > 0:
                 return X_near_reducted
@@ -2062,17 +2059,13 @@ class IRrtStar:
 
     #@staticmethod
     def Nearest(self,nodelist, node):
-        #return nodelist[int(np.argmin([(nd.x - n.x) ** 2 + (nd.y - n.y) ** 2
-        #                               for nd in nodelist]))]
-
-        nodelist_new = nodelist[:]
-        for nd in nodelist: #TODO check if this actually speeds things up
-            if (nd.x-node.x)**2>self.step_len**2 and (nd.y-node.y)**2>self.step_len**2:
-                nodelist_new.remove(nd)
-        if len(nodelist_new)==0:
-            return nodelist[int(np.argmin(
+        nearestnode =nodelist[int(np.argmin(
                 [self.FindCostInfoA(node.x, node.y, nd.x, nd.y, nd, False, True) for nd in nodelist]))]
-        return nodelist_new[int(np.argmin([self.FindCostInfoA(node.x, node.y, nd.x, nd.y, nd, False, True) for nd in nodelist_new]))]
+        return nearestnode
+        # if len(nodelist_new)==0:
+        #     return nodelist[int(np.argmin(
+        #         [self.FindCostInfoA(node.x, node.y, nd.x, nd.y, nd, False, True) for nd in nodelist]))]
+        # return nodelist_new[int(np.argmin([self.FindCostInfoA(node.x, node.y, nd.x, nd.y, nd, False, True) for nd in nodelist_new]))]
 
     def LastPath(self, node):
         # new with kinematics stuff

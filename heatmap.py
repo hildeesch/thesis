@@ -11,7 +11,7 @@ def show_map(matrix,show=True,save=False,path="",name="/new_picture"):
     fig, ax = plt.subplots()
     colormap = cm.Greys
     colormap.set_bad(color='black')
-    im = ax.imshow(matrix,cmap=colormap, vmin=0, vmax=1, origin='lower')
+    im = ax.imshow(matrix,cmap=colormap, vmin=0, vmax=1, origin='lower',extent=[0, 100, 0, 100])
 
     ax.set_title("Heatmap visualization")
     fig.tight_layout()
@@ -102,7 +102,7 @@ def withrows(matrix,plantdist,rowdist,field_vertex,show=True):
         #ax.grid(color='w', linestyle='-', linewidth=0.5, which="minor")
         colormap = cm.Greens
         colormap.set_bad(color='black',alpha=1)
-        im = ax.imshow(heatmatrix, colormap, vmin=0, vmax=1, origin='lower')
+        im = ax.imshow(heatmatrix, colormap, vmin=0, vmax=1, origin='lower',extent=[0, 100, 0, 100])
         ax.set_title("Spatial distribution of crops (with rows)")
         fig.tight_layout()
         ax.tick_params(which='minor', bottom=False, left=False)
@@ -111,7 +111,7 @@ def withrows(matrix,plantdist,rowdist,field_vertex,show=True):
         fig, ax = plt.subplots()
         colormap = cm.Reds
         colormap.set_bad(color='black')
-        im = ax.imshow(edgematrix, colormap, vmin=0, vmax=1, origin='lower')
+        im = ax.imshow(edgematrix, colormap, vmin=0, vmax=1, origin='lower',extent=[0, 100, 0, 100])
         ax.set_title("Edge points")
         fig.tight_layout()
         plt.show()
@@ -131,7 +131,7 @@ def norows(matrix,density,show=True):
         fig, ax = plt.subplots()
         colormap = cm.Greens
         colormap.set_bad(color='black')
-        im = ax.imshow(heatmatrix, colormap, vmin=0, vmax=1, origin='lower')
+        im = ax.imshow(heatmatrix, colormap, vmin=0, vmax=1, origin='lower',extent=[0, 100, 0, 100])
         ax.set_title("Spatial distribution of crops (no rows)")
         fig.tight_layout()
         plt.show()
@@ -142,9 +142,9 @@ def polygon(shape,show=True):
     if shape == "rectangle" or shape == "rectangle_obstacle":
         # Create Point objects
         p1 = (4, 4)
-        p2 = (4,95)
-        p3 = (95, 95)
-        p4 = (95,4)
+        p2 = (4,96)
+        p3 = (96, 96)
+        p4 = (96,4)
 
         # Create a Polygon
         coords = [p1,p2,p3,p4]
