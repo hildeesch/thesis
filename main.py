@@ -563,7 +563,7 @@ def default():
         print("Time taken = "+str(time_total)+" seconds. This is more than "+str(time_total//60)+" minutes")
 
         # Saving the figure:
-        boolsave=True
+        boolsave=False
         if boolsave:
             #showpath(uncertainty_matrix,finalpath,finalcost,finalinfo,budget, steplength, searchradius, iteration,True,True)
             if day==1:

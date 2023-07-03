@@ -151,7 +151,7 @@ class IRrtStar:
 
     def planning(self):
         show = False
-        visualizationmode="steps" #steps, nosteps or False
+        visualizationmode=False #steps, nosteps or False
         doubleround=self.doubleround # whether we want to plan a double path (true) or single path (false)
         rewiringafter=False
         #theta, dist, x_center, C, x_best = self.init()
@@ -219,7 +219,7 @@ class IRrtStar:
                     # else:
                     #     count_down=20 #reset
                     #     print("reset countdown")
-            if k==202: # to test up to certain iteration
+            if k==402: # to test up to certain iteration
                 #count_down=0
                 stopcriterion=True
             # if count_down<=0:
@@ -385,13 +385,23 @@ class IRrtStar:
         #end of doubleroundstrategy indent
 
         # Rewiring in Hindsight:
+        top10info = [] #to see effect of rewiring
         if rewiringafter or not doubleround and self.boolrewiring:
             info = {node: node.totalinfo for node in self.X_soln}
-            for i in range(10):  # rewire the 10 best nodes
+            topinfo = sorted(info, key=info.get)[-(1)].totalinfo
+            for i in range(200):  # rewire the x best nodes
                 # self.x_best = max(info, key=info.get)
                 curnode = sorted(info, key=info.get)[-(i + 1)]
-                self.Rewiring_afterv2(curnode, doubleround)
+                previnfo=curnode.totalinfo
+                if curnode.totalinfo*1.2<topinfo:
+                    print("Stop rewiring nodes at i = "+str(i))
+                    break
+                curnode = self.Rewiring_afterv2(curnode, doubleround)
+                top10info.append([round(previnfo),round(curnode.totalinfo)])
+                # ,round(curnode.totalinfo-previnfo),round(((curnode.totalinfo-previnfo)/previnfo),2)
             # self.Rewiring_after(self.x_best)
+            print("Rewiring, info changes:")
+            print(top10info)
             info = {node: node.totalinfo for node in self.X_soln}
             self.x_best = max(info, key=info.get)
             x_best = max(info, key=info.get)
