@@ -247,7 +247,8 @@ def prepandtest():
         # variant = [field, weedbool, weed/pathogen type]
         for rowsbool in [True,False]:
            #for variant in scenariovariants:
-           for variant in scenariovariants[-1]:
+           variant = scenariovariants[-1]
+           if variant == scenariovariants[-1]: #quick workaround
                # Choose the field shape:
                # Receive: field_matrix, field_vertex
                if variant[0]=="convex":
@@ -377,7 +378,8 @@ def prepandtest():
             # variant = [field, weedbool, weed/pathogen type]
             rowsbool = scenariosettings[0]
             #for variant in scenariovariants:
-            for variant in scenariovariants[-1]:
+            variant = scenariovariants[-1]
+            if variant == scenariovariants[-1]:  # quick workaround
 
                 if rowsbool:
                     pathname = str("Testing_files/rows/")+str(variant[0])+str(variant[2])
@@ -598,7 +600,7 @@ def default():
 
 
 if __name__ == '__main__':
-    default()
-    #prepandtest()
+    #default()
+    prepandtest()
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
