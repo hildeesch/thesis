@@ -321,8 +321,8 @@ def prepandtest():
                # for variant2 in scenariovariants:
                #     if variant[0]==variant2[0]:
                if rowsbool:
-                   pathname = str("../Testing_files/rows/") + str(variant[0]) + str(variant[2])
-                   #pathname = str("../Testing_files/rows/") + str(variant2[0]) + str(variant2[2])
+                   pathname = str("Testing_files/rows/") + str(variant[0]) + str(variant[2])
+                   #pathname = str("../Testing_files/rows/") + str(variant[0]) + str(variant[2])
                    if not os.path.exists(pathname):
                        os.makedirs(pathname)
                    # with open(pathname+'/row_nrs.pickle', 'wb') as handle:
@@ -335,8 +335,8 @@ def prepandtest():
                    np.save(pathname + '/row_edges.npy', row_edges)
                    np.save(pathname + '/field_vertex.npy', field_vertex)
                else:
-                   pathname = str("../Testing_files/norows/") + str(variant[0]) + str(variant[2])
-                   #pathname = str("../Testing_files/norows/") + str(variant2[0]) + str(variant2[2])
+                   pathname = str("Testing_files/norows/") + str(variant[0]) + str(variant[2])
+                   #pathname = str("../Testing_files/norows/") + str(variant[0]) + str(variant[2])
                    if not os.path.exists(pathname):
                        os.makedirs(pathname)
 
