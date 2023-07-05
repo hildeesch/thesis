@@ -219,7 +219,7 @@ class IRrtStar:
                     # else:
                     #     count_down=20 #reset
                     #     print("reset countdown")
-            if k==402: # to test up to certain iteration
+            if k==502: # to test up to certain iteration
                 #count_down=0
                 stopcriterion=True
             # if count_down<=0:

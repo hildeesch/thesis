@@ -301,7 +301,7 @@ def prepandtest():
                    for i in range(1,13):
                        reproductionrate= np.random.normal(weed.reproductionrate, weed.reproductionrateSTD)
                        rates.append(reproductionrate)
-
+               print(np.nansum(uncertainty_matrix))
                # Execute planning
                # Receive: samplelocations
                if scenariovariants.index(variant)%4==0:
@@ -334,7 +334,7 @@ def prepandtest():
                    #     pickle.dump(field_vertex,handle,protocol=pickle.HIGHEST_PROTOCOL)
                    np.save(pathname + '/row_nrs.npy', row_nrs)
                    np.save(pathname + '/row_edges.npy', row_edges)
-                   np.save(pathname + '/field_vertex.npy', field_vertex)
+                   np.save(pathname + '/field_vertex.npy', np.array(field_vertex,dtype=object))
                else:
                    pathname = str("Testing_files/norows/") + str(variant[0]) + str(variant[2])
                    #pathname = str("../Testing_files/norows/") + str(variant[0]) + str(variant[2])

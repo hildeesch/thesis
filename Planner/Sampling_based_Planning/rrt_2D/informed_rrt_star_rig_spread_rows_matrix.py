@@ -72,7 +72,7 @@ class IRrtStar:
         self.plotting = plotting.Plotting(x_start, x_goal)
         self.utils = utils.Utils(uncertaintymatrix)
 
-        self.fig, self.ax = plt.subplots()
+        #self.fig, self.ax = plt.subplots()
 
         self.delta = self.utils.delta
         self.x_range = self.env.x_range
@@ -218,7 +218,7 @@ class IRrtStar:
         return x_best
 
     def planning(self):
-        show=True
+        show=False
         doubleround=False
         rewiringafter=False
         #theta, dist, x_center, C, x_best = self.init()
@@ -237,7 +237,7 @@ class IRrtStar:
 
 
         k = 0
-        iter_min=200
+        iter_min=0
         if iter_min>self.iter_max:
             iter_min=0
         stopcriterion = False
@@ -268,7 +268,7 @@ class IRrtStar:
                     # else:
                     #     count_down=20 #reset
                     #     print("Reset countdown")
-            if k==601: # to test up to certain iteration
+            if k==501: # to test up to certain iteration
                 #count_down=0
                 stopcriterion=True
             #if count_down<=0 and (k>200 or k>(self.iter_max-3)):
