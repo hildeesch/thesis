@@ -105,11 +105,13 @@ class IRrtStar:
             self.boolrewiring=scenario[3]
             self.stopsetting=scenario[6]
             self.doubleround=scenario[7]
+            self.pathname = scenario[-1]
         else:
             self.budget=500
             self.boolrewiring=True
             self.stopsetting="mild"
             self.doubleround=False
+            self.pathname=None
 
         self.kinematic = "none"  # kinematic constraint
         # choices: "none", "dubins", "reedsshepprev", "reedsshepp", "ranger", "limit"
@@ -219,8 +221,9 @@ class IRrtStar:
 
     def planning(self):
         show=False
-        doubleround=False
+        doubleround=self.doubleround
         rewiringafter=False
+        visualizationmode="nosteps" #steps, nosteps or False
         #theta, dist, x_center, C, x_best = self.init()
         #theta, dist, x_center, x_best = self.init()
         x_best = self.init()
@@ -283,6 +286,18 @@ class IRrtStar:
             if (endlen-startlen)==0 and not double:
                 k-=1
             startlen = len(self.V)
+
+            if visualizationmode=="nosteps" and k>1 and not double:  # visualize all new connections with near ndoes
+                self.fig, self.ax = plt.subplots()
+                self.animation(k-1, x_new)
+                if self.pathname and k%25==0:
+                    plt.savefig(self.pathname + "animation_"+str(k))
+                if show:
+                    plt.show()
+                else:
+                    plt.close()
+
+
             timestart = time.time()
             if self.samplelocations_add:
                 x_rand = self.SampleFreeSpace()
@@ -357,9 +372,9 @@ class IRrtStar:
                 if doubleround:
                     self.RoundTwoAdd(node_new)
 
-            if k % 50 == 0 and not double:
+            if (k-1) % 50 == 0 and not double:
                 if show:
-                    self.animation()
+                    self.animation(k-1,x_new)
                 self.time[7] = time.time()-totalstarttime
                 print(self.time)
                 if k>0:
@@ -580,6 +595,11 @@ class IRrtStar:
                 print("Executed path is round 2")
         # final return
         matrices= [self.costmatrix,self.anglematrix]
+        if self.pathname:
+            np.save(self.pathname + 'i_list.npy', self.k_list)
+            np.save(self.pathname + 'k_list.npy', self.i_list)
+            np.save(self.pathname + 'i_list_avg_der.npy', self.i_list_avg_der)
+            np.save(self.pathname + 'i_list_avg_der2.npy', self.i_list_avg_der2)
         return self.path, infopathradius, x_best.totalcost, x_best.totalinfo, self.budget, self.step_len, self.search_radius, k, matrices, self.samplelocations
 
     def StopCriterion(self, k):
@@ -1489,7 +1509,8 @@ class IRrtStar:
             #     bestpath[-1].parent=copynode # just now
             bestpath.append(copynode) #
             #bestpath.append(node)
-            infosteps.append(node.info-node.parent.info)
+            #infosteps.append(node.info-node.parent.info)
+            infosteps.append((node.info-node.parent.info)/(node.cost-node.parent.cost)) # density of increase of info
             # the infosteps contain the added info for the parent to the node (of that node)
             prev_copynode=copynode
             node=node.parent
@@ -2176,30 +2197,41 @@ class IRrtStar:
         dy = node_end.y - node_start.y
         return math.hypot(dx, dy), math.atan2(dy, dx)
 
-    def animation(self):
+    def animation(self,k=None,x_new=None):
 
         plt.cla()
-        self.plot_grid("Informed rrt*, N = " + str(self.iter_max))
+        if k:
+            self.plot_grid("RIG, k = " + str(k)+", new node = ("+str(x_new.x)+","+str(x_new.y)+")")
+        elif not k:
+            self.plot_grid("RIG, k_max = " + str(self.iter_max))
         plt.gcf().canvas.mpl_connect(
             'key_release_event',
             lambda event: [exit(0) if event.key == 'escape' else None])
 
 
-        # for node in self.V:
-        #     if node.parent:
-        #         reachedparent=False
-        #         prevpoint=[node.x,node.y]
-        #         infopath = self.infopathmatrix[node.parent.y*100+node.parent.x, node.y*100+node.x]
-        #         for point in infopath[::-1]:
-        #             reachedparent= (point[0]==node.parent.x and point[1]==node.parent.y)
-        #
-        #             plt.plot([point[0], prevpoint[0]], [point[1], prevpoint[1]], "-g")
-        #             prevpoint=point
-        #             if reachedparent:
-        #                break
+        for node in self.V:
+            if node.parent:
+                reachedparent=False
+                prevpoint=[node.x,node.y]
+                infopath = self.infopathmatrix[node.parent.y*100+node.parent.x, node.y*100+node.x]
+                for point in infopath[::-1]:
+                    reachedparent= (point[0]==node.parent.x and point[1]==node.parent.y)
+
+                    plt.plot([point[0], prevpoint[0]], [point[1], prevpoint[1]], "-g")
+                    prevpoint=point
+                    if reachedparent:
+                       break
 
 
+        if x_new:
+            plt.plot(x_new.x, x_new.y, "bs", linewidth=3)
 
+        plt.xlim([0, 100])
+        plt.ylim([0, 100])
+        self.ax.set_xlim([0, 100])
+        self.ax.set_ylim([0, 100])
+
+        self.fig.tight_layout()
         plt.pause(0.01)
 
     def plot_grid(self, name):
@@ -2214,35 +2246,35 @@ class IRrtStar:
         #         )
         #     )
 
-        for (ox, oy, w, h) in self.obs_rectangle:
-            self.ax.add_patch(
-                patches.Rectangle(
-                    (ox, oy), w, h,
-                    edgecolor='black',
-                    facecolor='gray',
-                    fill=True
-                )
-            )
-
-        for (ox, oy, r) in self.obs_circle:
-            self.ax.add_patch(
-                patches.Circle(
-                    (ox, oy), r,
-                    edgecolor='black',
-                    facecolor='gray',
-                    fill=True
-                )
-            )
-
-        #added to visualize the edges of the field and the obstacles:
-        for row in range(100):
-            for col in range(100):
-                if np.isnan(self.uncertaintymatrix[row,col]):
-                    self.ax.add_patch(patches.Rectangle((col-0.5,row-0.5),1,1,
-                                                        edgecolor='black',
-                                                        facecolor='gray',
-                                                        fill=True
-                                                        ))
+        # for (ox, oy, w, h) in self.obs_rectangle:
+        #     self.ax.add_patch(
+        #         patches.Rectangle(
+        #             (ox, oy), w, h,
+        #             edgecolor='black',
+        #             facecolor='gray',
+        #             fill=True
+        #         )
+        #     )
+        #
+        # for (ox, oy, r) in self.obs_circle:
+        #     self.ax.add_patch(
+        #         patches.Circle(
+        #             (ox, oy), r,
+        #             edgecolor='black',
+        #             facecolor='gray',
+        #             fill=True
+        #         )
+        #     )
+        #
+        # #added to visualize the edges of the field and the obstacles:
+        # for row in range(100):
+        #     for col in range(100):
+        #         if np.isnan(self.uncertaintymatrix[row,col]):
+        #             self.ax.add_patch(patches.Rectangle((col-0.5,row-0.5),1,1,
+        #                                                 edgecolor='black',
+        #                                                 facecolor='gray',
+        #                                                 fill=True
+        #                                                 ))
                 # if self.maze[row,col]==0:
                 #     self.ax.add_patch(patches.Rectangle((col-0.5,row-0.5),1,1,
                 #                                         edgecolor='black',
@@ -2250,11 +2282,18 @@ class IRrtStar:
                 #                                         fill=True
                 #                                         ))
 
+
+
+        colormap = cm.Blues
+        colormap.set_bad(color='black')
+        im = self.ax.imshow(self.uncertaintymatrix, cmap=colormap, vmin=0, vmax=1, origin='lower',
+                            extent=[0, 100, 0, 100])
+
         plt.plot(self.x_start.x, self.x_start.y, "bs", linewidth=3)
         plt.plot(self.x_goal.x, self.x_goal.y, "rs", linewidth=3)
 
         plt.title(name)
-        plt.axis("equal")
+        #plt.axis("equal")
 
     @staticmethod
     def draw_ellipse(x_center, c_best, dist, theta):

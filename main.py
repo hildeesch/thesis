@@ -322,8 +322,8 @@ def prepandtest():
                # for variant2 in scenariovariants:
                #     if variant[0]==variant2[0]:
                if rowsbool:
-                   pathname = str("Testing_files/rows/") + str(variant[0]) + str(variant[2])
-                   #pathname = str("../Testing_files/rows/") + str(variant[0]) + str(variant[2])
+                   #pathname = str("Testing_files/rows/") + str(variant[0]) + str(variant[2])
+                   pathname = str("../Testing_files/rows/") + str(variant[0]) + str(variant[2])
                    if not os.path.exists(pathname):
                        os.makedirs(pathname)
                    # with open(pathname+'/row_nrs.pickle', 'wb') as handle:
@@ -336,8 +336,8 @@ def prepandtest():
                    np.save(pathname + '/row_edges.npy', row_edges)
                    np.save(pathname + '/field_vertex.npy', np.array(field_vertex,dtype=object))
                else:
-                   pathname = str("Testing_files/norows/") + str(variant[0]) + str(variant[2])
-                   #pathname = str("../Testing_files/norows/") + str(variant[0]) + str(variant[2])
+                   #pathname = str("Testing_files/norows/") + str(variant[0]) + str(variant[2])
+                   pathname = str("../Testing_files/norows/") + str(variant[0]) + str(variant[2])
                    if not os.path.exists(pathname):
                        os.makedirs(pathname)
 
@@ -382,9 +382,9 @@ def prepandtest():
             if variant == scenariovariants[-1]:  # quick workaround
 
                 if rowsbool:
-                    pathname = str("Testing_files/rows/")+str(variant[0])+str(variant[2])
+                    pathname = str("../Testing_files/rows/")+str(variant[0])+str(variant[2])
                 else:
-                    pathname = str("Testing_files/norows/") + str(variant[0]) + str(variant[2])
+                    pathname = str("../Testing_files/norows/") + str(variant[0]) + str(variant[2])
                     row_nrs = np.load(pathname+'/row_nrs.npy')
                     row_edges = np.load(pathname+'/row_edges.npy')
                     field_vertex = np.load(pathname+'/field_vertex.npy')
@@ -402,6 +402,16 @@ def prepandtest():
                 samplelocations = np.load(pathname+ '/samplelocations.npy')
                 reproductionrates = np.load(pathname+ '/reproductionrates.npy')
 
+                # defining the path to the result folder
+                if rowsbool:
+                    pathname = str("../Result_files/rows/") + str(scenario) + str("/") + str(variant[0]) + str(
+                        variant[2]+"/")
+                else:
+                    pathname = str("../Result_files/norows/") + str(scenario) + str("/") + str(
+                        variant[0]) + str(variant[2]+"/")
+                if not os.path.exists(pathname):
+                    os.makedirs(pathname)
+                scenariosettings.append(pathname) # such that files can also be saved within the algorithm
 
                 time_start = time.process_time()
                 if scenario[0]==6:
@@ -410,6 +420,7 @@ def prepandtest():
                         time_start = time.process_time()
                         total_days = 12
                         for day in range(1, total_days + 1):
+                            scenariosettings[-1]=pathname+str(day)
                             reproductionrate=reproductionrates[day-1]
                             if rowsbool:
                                 [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
@@ -422,27 +433,19 @@ def prepandtest():
                             time_end = time.process_time()
                             totaltime = time_end - time_start
                             # Saving the results per day
-                            if rowsbool:
-                                pathname = str("Result_files/rows/") + str(scenario) + str("/") + str(variant[0]) + str(
-                                    variant[2])
-                            else:
-                                pathname = str("Result_files/norows/") + str(scenario) + str("/") + str(
-                                    variant[0]) + str(variant[2])
-                            if not os.path.exists(pathname):
-                                os.makedirs(pathname)
-                            np.save(pathname + '/finalpath_'+str(day)+'.npy', finalpath)
-                            np.save(pathname + '/infopath_'+str(day)+'.npy', infopath)
-                            np.save(pathname + '/finalcost_'+str(day)+'.npy', finalcost)
-                            np.save(pathname + '/finalinfo_'+str(day)+'.npy', finalinfo)
-                            np.save(pathname + '/iteration_'+str(day)+'.npy', iteration)
-                            np.save(pathname + '/runtime_'+str(day)+'.npy', totaltime)
+                            np.save(pathname + str(day)+'_finalpath.npy', finalpath)
+                            np.save(pathname + str(day)+'_infopath.npy', infopath)
+                            np.save(pathname + str(day)+'_finalcost.npy', finalcost)
+                            np.save(pathname + str(day)+'_finalinfo.npy', finalinfo)
+                            np.save(pathname + str(day)+'_iteration.npy', iteration)
+                            np.save(pathname + str(day)+'_runtime.npy', totaltime)
 
-                            np.save(pathname + '/spread_matrix_'+str(day)+'.npy', spread_matrix)
-                            np.save(pathname + '/worldmodel_matrix_'+str(day)+'.npy', worldmodel_matrix)
-                            np.save(pathname + '/uncertainty_matrix_'+str(day)+'.npy', uncertainty_matrix)
-                            show_map(spread_matrix, False, True, pathname, "/spread_matrix_"+str(day))
-                            show_map(worldmodel_matrix, False, True, pathname, "/worldmodel_matrix"+str(day))
-                            show_map(uncertainty_matrix, False, True, pathname, "/uncertainty_matrix"+str(day))
+                            np.save(pathname + str(day)+'_spread_matrix.npy', spread_matrix)
+                            np.save(pathname + str(day)+'_worldmodel_matrix.npy', worldmodel_matrix)
+                            np.save(pathname + str(day)+'_uncertainty_matrix.npy', uncertainty_matrix)
+                            show_map(spread_matrix, False, True, pathname, str(day)+'_spread_matrix')
+                            show_map(worldmodel_matrix, False, True, pathname, str(day)+'_worldmodel_matrix')
+                            show_map(uncertainty_matrix, False, True, pathname, str(day)+'_uncertainty_matrix')
 
                             disease = getDisease(variant[2])
                             [spread_matrix, worldmodel_matrix, uncertainty_matrix] = updatematrix(
@@ -462,18 +465,12 @@ def prepandtest():
                     time_end = time.process_time()
                     totaltime = time_end-time_start
                     # Saving the results
-                    if rowsbool:
-                        pathname = str("Result_files/rows/") + str(scenario) +str("/") + str(variant[0]) + str(variant[2])
-                    else:
-                        pathname = str("Result_files/norows/") + str(scenario) +str("/") + str(variant[0]) + str(variant[2])
-                    if not os.path.exists(pathname):
-                        os.makedirs(pathname)
-                    np.save(pathname + '/finalpath.npy', finalpath)
-                    np.save(pathname + '/infopath.npy', infopath)
-                    np.save(pathname + '/finalcost.npy', finalcost)
-                    np.save(pathname + '/finalinfo.npy', finalinfo)
-                    np.save(pathname + '/iteration.npy', iteration)
-                    np.save(pathname + '/runtime.npy', totaltime)
+                    np.save(pathname + 'finalpath.npy', finalpath)
+                    np.save(pathname + 'infopath.npy', infopath)
+                    np.save(pathname + 'finalcost.npy', finalcost)
+                    np.save(pathname + 'finalinfo.npy', finalinfo)
+                    np.save(pathname + 'iteration.npy', iteration)
+                    np.save(pathname + 'runtime.npy', totaltime)
 
 
 
