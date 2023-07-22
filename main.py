@@ -28,7 +28,7 @@ from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread_rows_ma
 
 # Press Shift+F10 to execute it or replace it with your code.
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-def getSettings(scenario, rowsbool):
+def getSettings(scenario):
     # setting the defaults:
     informed=True
     rewiring = True
@@ -242,7 +242,7 @@ def prepandtest():
                         ["obstacle", False, "pathogen1"], ["obstacle", False, "pathogen2"], ["obstacle", True, "weed1"],
                         ["obstacle", True, "weed2"], ["rectangle", False, "pathogen1"]]
     # variant = [field, weedbool, weed/pathogen type]
-    preparing = True
+    preparing = False
     if preparing:
         # variant = [field, weedbool, weed/pathogen type]
         for rowsbool in [True,False]:
@@ -363,7 +363,7 @@ def prepandtest():
                print("Finished saving for this scenario/ field")
 
 
-    testing=False
+    testing=True
     if testing:
         scenariolist = [[1, 1], [1, 2], [1, 3], [1, 4], [1, 5], [1, 6], [1, 7], [1, 8],
                         [2, 1], [2, 2], [2, 3], [2, 4],
@@ -371,7 +371,7 @@ def prepandtest():
                         [4, 1], [4, 2], [4, 3], [4, 4], [4, 5], [4, 6], [4, 7], [4, 8],
                         [5, 1], [5, 2], [5, 3], [5, 4],
                         [6, 1], [6, 2], [6, 3], [6, 4]]
-        for scenario in scenariolist:
+        for scenario in scenariolist[5:]:
             scenariosettings = getSettings(scenario)
             # scenariosettings = [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
 
@@ -383,11 +383,14 @@ def prepandtest():
 
                 if rowsbool:
                     pathname = str("../Testing_files/rows/")+str(variant[0])+str(variant[2])
+                    row_nrs_np = np.load(pathname + '/row_nrs.npy')
+                    row_nrs=[]
+                    for row_nr in row_nrs_np:
+                        row_nrs.append(row_nr)
+                    row_edges = np.load(pathname + '/row_edges.npy')
+                    field_vertex = np.load(pathname + '/field_vertex.npy', allow_pickle=True)
                 else:
                     pathname = str("../Testing_files/norows/") + str(variant[0]) + str(variant[2])
-                    row_nrs = np.load(pathname+'/row_nrs.npy')
-                    row_edges = np.load(pathname+'/row_edges.npy')
-                    field_vertex = np.load(pathname+'/field_vertex.npy')
                 spread_matrix= np.load(pathname+'/spread_matrix.npy')
                 worldmodel_matrix= np.load(pathname+'/worldmodel_matrix.npy')
                 uncertainty_matrix =  np.load(pathname+'/uncertainty_matrix.npy')
@@ -398,8 +401,14 @@ def prepandtest():
                 # matrices3 = np.load(pathname+'/matrices3.npy')
                 matrices = [matrices0,matrices1]
 
+                if scenario==[1,1] or scenario==[1,5]:
+                    samplelocations=[]
+                    pathname_test=pathname
+                else:
+                    samplelocations = np.load(pathname+ '/samplelocations.npy')
+                    print("samplelocations are loaded")
+                    print(samplelocations)
 
-                samplelocations = np.load(pathname+ '/samplelocations.npy')
                 reproductionrates = np.load(pathname+ '/reproductionrates.npy')
 
                 # defining the path to the result folder
@@ -429,6 +438,7 @@ def prepandtest():
                             else:
                                 [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
                                  matrices_new, samplelocations_new] = rig_matrix(uncertainty_matrix, scenariosettings, matrices,samplelocations)
+
 
                             time_end = time.process_time()
                             totaltime = time_end - time_start
@@ -464,6 +474,11 @@ def prepandtest():
                          matrices, samplelocations] = rig_matrix(uncertainty_matrix, scenariosettings, matrices,samplelocations)
                     time_end = time.process_time()
                     totaltime = time_end-time_start
+
+                    if scenario == [1, 1] or scenario == [1, 5]:
+                        print("Samplelocations are saved")
+                        print(samplelocations)
+                        np.save(pathname_test + '/samplelocations.npy', samplelocations)
                     # Saving the results
                     np.save(pathname + 'finalpath.npy', finalpath)
                     np.save(pathname + 'infopath.npy', infopath)

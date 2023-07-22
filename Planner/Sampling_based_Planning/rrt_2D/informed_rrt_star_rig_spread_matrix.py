@@ -60,7 +60,7 @@ class IRrtStar:
         self.plotting = plotting.Plotting(x_start, x_goal)
         self.utils = utils.Utils(uncertaintymatrix)
 
-        self.fig, self.ax = plt.subplots()
+        #self.fig, self.ax = plt.subplots()
         self.delta = self.utils.delta
         self.x_range = self.env.x_range
         self.y_range = self.env.y_range
@@ -90,10 +90,11 @@ class IRrtStar:
             self.pathname=None
         #self.scenario=scenario
         self.samplelocations=samplelocations
-        self.samplelocations_add=False
-        if not samplelocations:
+        if len(samplelocations)>0:
+            self.samplelocations_add=False
+        else:
+            self.samplelocations_add = True
             self.samplelocations=[]
-            self.samplelocations_add=True
 
         self.kinematic = "none" # kinematic constraint
         # choices: "none", "dubins", "reedsshepprev", "reedsshepp", "ranger", "limit"
@@ -192,7 +193,7 @@ class IRrtStar:
 
         k=0
         stopcriterion=False
-        iter_min = 200
+        iter_min = 100
         double=False # for viz purposes it is defined here
         while k<self.iter_max:
             k+=1
@@ -211,7 +212,7 @@ class IRrtStar:
                     i_best = info[x_best]
 
                     stopcriterion = self.StopCriterion(k)
-                    if stopcriterion:
+                    if stopcriterion and "[5," not in self.pathname:
                         print("Stop criterion = True at it. "+str(k))
                         stopcriterion=False
 
@@ -221,7 +222,7 @@ class IRrtStar:
                     # else:
                     #     count_down=20 #reset
                     #     print("reset countdown")
-            if k==501: # to test up to certain iteration
+            if k==502 and "[5," not in self.pathname: # to test up to certain iteration
                 #count_down=0
                 stopcriterion=True
             # if count_down<=0:
@@ -239,11 +240,11 @@ class IRrtStar:
             #     print("Len X_Near was: "+str(len(self.Near(self.V,x_new))))
             startlen = len(self.V)
 
-            if visualizationmode=="nosteps" and k>1 and not double:  # visualize all new connections with near ndoes
+            if (k-1)%25==0 and visualizationmode=="nosteps" and k>1 and not double:  # visualize all new connections with near ndoes
                 self.fig, self.ax = plt.subplots()
                 self.animation(k-1, x_new)
-                if self.pathname and k%25==0:
-                    plt.savefig(self.pathname + "animation_"+str(k))
+                if self.pathname:
+                    plt.savefig(self.pathname + "animation_"+str(k-1))
                 if show:
                     plt.show()
                 else:
@@ -253,9 +254,10 @@ class IRrtStar:
             timestart=time.time()
             if self.samplelocations_add:
                 x_rand = self.SampleFreeSpace()
-                self.samplelocations.append(x_rand)
+                self.samplelocations.append([x_rand.x, x_rand.y])
             else:
-                x_rand=self.samplelocations[k]
+                x_rand = Node((self.samplelocations[k-1]))
+                #x_rand=self.samplelocations[k]
                 if double: # otherwise we keep trying the same location again and again
                     x_rand = self.SampleFreeSpace()
             if visualizationmode=="steps" and not double:  # visualize all new connections with near ndoes
@@ -394,7 +396,7 @@ class IRrtStar:
         if rewiringafter or not doubleround and self.boolrewiring:
             info = {node: node.totalinfo for node in self.X_soln}
             topinfo = sorted(info, key=info.get)[-(1)].totalinfo
-            for i in range(20):  # rewire the x best nodes
+            for i in range(min(200,len(info))):  # rewire the x best nodes
                 # self.x_best = max(info, key=info.get)
                 curnode = sorted(info, key=info.get)[-(i + 1)]
                 previnfo=curnode.totalinfo
@@ -415,9 +417,13 @@ class IRrtStar:
             doubleround=False # to make sure it rewires in the correct way
             top20nodes=[] #top 10 nodes split in two rounds each
             info = {node: node.totalinfo for node in self.X_soln}
-            for i in range(10):  # rewire the 10 best nodes
+            topinfo = sorted(info, key=info.get)[-(1)].totalinfo
+            for i in range(min(200,len(info))):  # rewire the 10 best nodes
                 # self.x_best = max(info, key=info.get)
                 curnode = sorted(info, key=info.get)[-(i + 1)]
+                if curnode.totalinfo*1.2<topinfo:
+                    print("Stop rewiring nodes at i = "+str(i))
+                    break
                 [nodefirstround, nodesecondround] = self.splitDoublePath(curnode)
                 if nodefirstround not in top20nodes:
                     nodefirstround = self.Rewiring_afterv2(nodefirstround,doubleround)
@@ -1831,20 +1837,21 @@ class IRrtStar:
         self.fig.tight_layout()
         plt.pause(0.01)
 
-        if x_new and pruningstep!=1:
-            #now = datetime.now()
-            #now_string = now.strftime("%m_%d_%H_%M")
-            #now_string=str(time.time())
-            now_string=str(k)
-            if pruningstep!=False:
-                if pruningstep==3: #workaround such that 0 and False are not identified as the same
-                    pruningstep=0
-                now_string=now_string+"_"+str(pruningstep)
-            path = "../../Documents/Thesis_project/Figures/GIF_figures/"
-            dirname = os.path.dirname(path)
-            filename = "/Visualization_" + now_string + ".png"
-            # plt.savefig(os.path.join(dirname,filename))
-            plt.savefig(path + filename)
+
+        # if x_new and pruningstep!=1:
+        #     #now = datetime.now()
+        #     #now_string = now.strftime("%m_%d_%H_%M")
+        #     #now_string=str(time.time())
+        #     now_string=str(k)
+        #     if pruningstep!=False:
+        #         if pruningstep==3: #workaround such that 0 and False are not identified as the same
+        #             pruningstep=0
+        #         now_string=now_string+"_"+str(pruningstep)
+        #     path = "../../Documents/Thesis_project/Figures/GIF_figures/"
+        #     dirname = os.path.dirname(path)
+        #     filename = "/Visualization_" + now_string + ".png"
+        #     # plt.savefig(os.path.join(dirname,filename))
+        #     plt.savefig(path + filename)
 
     def plot_grid(self, name):
 
@@ -1923,9 +1930,9 @@ def main(uncertaintymatrix,scenario=None,matrices=None,samplelocations=None):
     x_goal = (50,50)
     # scenario = [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
     if scenario:
-        rrt_star = IRrtStar(x_start, x_goal, scenario[4], 0.0, scenario[5], 2000, uncertaintymatrix, scenario, matrices, samplelocations)
+        rrt_star = IRrtStar(x_start, x_goal, scenario[4], 0.0, scenario[5], 1000, uncertaintymatrix, scenario, matrices, samplelocations)
     else:
-        rrt_star = IRrtStar(x_start, x_goal, 15, 0.0, 15, 2000,uncertaintymatrix,scenario,matrices,samplelocations)
+        rrt_star = IRrtStar(x_start, x_goal, 15, 0.0, 15, 1000,uncertaintymatrix,scenario,matrices,samplelocations)
     [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,matrices,samplelocations]=rrt_star.planning()
 
     return finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration, matrices,samplelocations

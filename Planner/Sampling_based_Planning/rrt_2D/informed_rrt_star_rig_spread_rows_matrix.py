@@ -95,10 +95,13 @@ class IRrtStar:
         self.inforadius=0
         self.scenario = scenario
         self.samplelocations = samplelocations
-        self.samplelocations_add = False
-        if not samplelocations:
-            self.samplelocations = []
+        if len(samplelocations) > 0:
+            self.samplelocations_add = False
+            # print("Samplelocations are given")
+            # print(samplelocations)
+        else:
             self.samplelocations_add = True
+            self.samplelocations = []
         # scenario = [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
         if scenario:
             self.budget = scenario[1]
@@ -240,10 +243,11 @@ class IRrtStar:
 
 
         k = 0
-        iter_min=0
+        iter_min=100
         if iter_min>self.iter_max:
             iter_min=0
         stopcriterion = False
+        double=False # for viz purposes it is defined here
         while k < self.iter_max:
             k += 1
             # time.sleep(0.1)
@@ -261,7 +265,7 @@ class IRrtStar:
                     i_best = info[x_best]
 
                     stopcriterion = self.StopCriterion(k)
-                    if stopcriterion:
+                    if stopcriterion and "[5," not in self.pathname:
                         print("Stop criterion = True at it. "+str(k))
                         stopcriterion=False
 
@@ -271,7 +275,7 @@ class IRrtStar:
                     # else:
                     #     count_down=20 #reset
                     #     print("Reset countdown")
-            if k==501: # to test up to certain iteration
+            if k==502 and "[5," not in self.pathname: # to test up to certain iteration
                 #count_down=0
                 stopcriterion=True
             #if count_down<=0 and (k>200 or k>(self.iter_max-3)):
@@ -287,11 +291,11 @@ class IRrtStar:
                 k-=1
             startlen = len(self.V)
 
-            if visualizationmode=="nosteps" and k>1 and not double:  # visualize all new connections with near ndoes
+            if (k-1)%25==0 and visualizationmode=="nosteps" and k>1 and not double:  # visualize all new connections with near ndoes
                 self.fig, self.ax = plt.subplots()
                 self.animation(k-1, x_new)
-                if self.pathname and k%25==0:
-                    plt.savefig(self.pathname + "animation_"+str(k))
+                if self.pathname:
+                    plt.savefig(self.pathname + "animation_"+str(k-1))
                 if show:
                     plt.show()
                 else:
@@ -301,9 +305,9 @@ class IRrtStar:
             timestart = time.time()
             if self.samplelocations_add:
                 x_rand = self.SampleFreeSpace()
-                self.samplelocations.append(x_rand)
+                self.samplelocations.append([x_rand.x,x_rand.y])
             else:
-                x_rand=self.samplelocations[k]
+                x_rand = Node((self.samplelocations[k-1]))
                 if double: # otherwise we keep trying the same location again and again
                     x_rand = self.SampleFreeSpace()
             timeend= time.time()
@@ -392,9 +396,13 @@ class IRrtStar:
         # Rewiring in Hindsight:
         if rewiringafter or not doubleround and self.boolrewiring:
             info = {node: node.totalinfo for node in self.X_soln}
-            for i in range(10):  # rewire the 10 best nodes
+            topinfo = sorted(info, key=info.get)[-(1)].totalinfo
+            for i in range(min(200,len(info))):  # rewire the 10 best nodes
                 # self.x_best = max(info, key=info.get)
                 curnode = sorted(info, key=info.get)[-(i + 1)]
+                if curnode.totalinfo * 1.2 < topinfo:
+                    print("Stop rewiring nodes at i = " + str(i))
+                    break
                 self.Rewiring_afterv2(curnode, doubleround)
             # self.Rewiring_after(self.x_best)
             info = {node: node.totalinfo for node in self.X_soln}
@@ -406,9 +414,13 @@ class IRrtStar:
             doubleround = False  # to make sure it rewires in the correct way
             top20nodes = []  # top 10 nodes split in two rounds each
             info = {node: node.totalinfo for node in self.X_soln}
-            for i in range(10):  # rewire the 10 best nodes
+            topinfo = sorted(info, key=info.get)[-(1)].totalinfo
+            for i in range(min(200,len(info))):  # rewire the 10 best nodes
                 # self.x_best = max(info, key=info.get)
                 curnode = sorted(info, key=info.get)[-(i + 1)]
+                if curnode.totalinfo * 1.2 < topinfo:
+                    print("Stop rewiring nodes at i = " + str(i))
+                    break
                 print("Top 10 nr "+str(i)+" node: "+str(curnode.x),str(curnode.y)+" Cost,info: "+str(curnode.totalcost),str(curnode.totalinfo))
                 [nodefirstround, nodesecondround] = self.splitDoublePath(curnode)
                 if nodefirstround not in top20nodes:
@@ -2320,10 +2332,10 @@ def main(uncertaintymatrix,row_nrs,row_edges,field_vertex,scenario=None,matrices
     x_goal = (50,48)
     # scenario = [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
     if scenario:
-        rrt_star = IRrtStar(x_start, x_goal, scenario[4], 0.0, scenario[5], 2000, uncertaintymatrix, row_nrs,row_edges,field_vertex,scenario, matrices,
+        rrt_star = IRrtStar(x_start, x_goal, scenario[4], 0.0, scenario[5], 1000, uncertaintymatrix, row_nrs,row_edges,field_vertex,scenario, matrices,
                             samplelocations)
     else:
-        rrt_star = IRrtStar(x_start, x_goal, 100, 0.0, 15, 2000,uncertaintymatrix,row_nrs,row_edges,field_vertex,scenario,matrices,samplelocations)
+        rrt_star = IRrtStar(x_start, x_goal, 100, 0.0, 15, 1000,uncertaintymatrix,row_nrs,row_edges,field_vertex,scenario,matrices,samplelocations)
     [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,matrices,samplelocations]=rrt_star.planning()
 
     return finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration, matrices,samplelocations
