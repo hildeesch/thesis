@@ -5,20 +5,25 @@ from matplotlib import cm
 import matplotlib.pyplot as plt
 from copy import deepcopy
 from shapely.geometry import Point, Polygon
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
 def show_map(matrix,show=True,save=False,path="",name="/new_picture"):
     fig, ax = plt.subplots()
-    colormap = cm.Greys
+    colormap = cm.Blues
     colormap.set_bad(color='black')
     im = ax.imshow(matrix,cmap=colormap, vmin=0, vmax=1, origin='lower',extent=[0, 100, 0, 100])
-
-    ax.set_title("Heatmap visualization")
+    # divider = make_axes_locatable(ax)
+    # cax = divider.append_axes("right", size="5%", pad=0.05)
+    #
+    # plt.colorbar(im, cax=cax)
+    #ax.set_title("Heatmap visualization")
     fig.tight_layout()
     if show:
         plt.show()
     if save:
         plt.savefig(path+name)
+    return plt
 
 # plantdist: 1 = plant in every row/column, 2= one distance between them, etc.
 def withrows(matrix,plantdist,rowdist,field_vertex,show=True):
@@ -206,6 +211,7 @@ def polygon(shape,show=True):
     # obstacle:
     if shape == "rectangle_obstacle":
         matrix[30:40,45:60] = np.nan
+        matrix[60:90, 65:70] = np.nan
 
     if show:
         show_map(matrix)

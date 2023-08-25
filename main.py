@@ -13,6 +13,7 @@ import time
 from copy import deepcopy
 import os
 import pickle
+import matplotlib as mpl
 
 
 from weed import Weed
@@ -40,38 +41,38 @@ def getSettings(scenario):
     # setting the scenario based on the tested variable
     match scenario[0]:
         case 1:
-            print("Var: budget") #TODO decide on the budgets (percentage or absolute?)
+            print("Var: budget")
             match scenario[1]:
                 case 1:
-                    print("Setting: 10 procent - no rows")
+                    print("Setting: budget = 200 - no rows")
                     rowsbool=False
                     budget = 200
                 case 2:
-                    print("Setting: 20 procent - no rows")
+                    print("Setting: budget = 350 - no rows")
                     rowsbool=False
                     budget = 350
                 case 3:
-                    print("Setting: 35 procent - no rows")
+                    print("Setting: budget = 500 - no rows")
                     rowsbool=False
                     budget = 500
                 case 4:
-                    print("Setting: 50 procent - no rows")
+                    print("Setting: budget = 650 - no rows")
                     rowsbool=False
                     budget = 650
                 case 5:
-                    print("Setting: 10 procent - rows")
+                    print("Setting: budget = 300 - rows")
                     rowsbool=True
                     budget = 300
                 case 6:
-                    print("Setting: 20 procent - rows")
+                    print("Setting: budget = 500 - rows")
                     rowsbool=True
                     budget = 500
                 case 7:
-                    print("Setting: 35 procent - rows")
+                    print("Setting: budget = 700 - rows")
                     rowsbool=True
                     budget = 700
                 case 8:
-                    print("Setting: 50 procent - rows")
+                    print("Setting: budget = 900 - rows")
                     rowsbool=True
                     budget = 900
         case 2:
@@ -193,6 +194,64 @@ def getSettings(scenario):
                     print("Single path - rows")
                     rowsbool=True
                     horizonplanning=False
+        case 7:
+            print("Var: Long simulations, testing informedness")
+            match scenario[1]:
+                case 1:
+                    print("No rows, informed")
+                    rowsbool = False
+                    horizonplanning = False
+                case 2:
+                    print("No rows, uninformed")
+                    rowsbool = False
+                    horizonplanning = False
+        case 8:
+            print("Var: Long simulations, testing informedness starting with blank worldmodel")
+            match scenario[1]:
+                case 1:
+                    print("No rows, informed")
+                    rowsbool = False
+                    horizonplanning = False
+                case 2:
+                    print("No rows, uninformed")
+                    rowsbool = False
+                    horizonplanning = False
+        case 9:
+            print("Var: budget, uncertaintymatrix = uniform")
+            match scenario[1]:
+                case 1:
+                    print("Setting: budget = 200 - no rows")
+                    rowsbool = False
+                    budget = 200
+                case 2:
+                    print("Setting: budget = 350 - no rows")
+                    rowsbool = False
+                    budget = 350
+                case 3:
+                    print("Setting: budget = 500 - no rows")
+                    rowsbool = False
+                    budget = 500
+                case 4:
+                    print("Setting: budget = 650 - no rows")
+                    rowsbool = False
+                    budget = 650
+                case 5:
+                    print("Setting: budget = 300 - rows")
+                    rowsbool = True
+                    budget = 300
+                case 6:
+                    print("Setting: budget = 500 - rows")
+                    rowsbool = True
+                    budget = 500
+                case 7:
+                    print("Setting: budget = 700 - rows")
+                    rowsbool = True
+                    budget = 700
+                case 8:
+                    print("Setting: budget = 900 - rows")
+                    rowsbool = True
+                    budget = 900
+
 
     # setting default step_len and search_radius based on the rowsbool
     if not step_len and not rowsbool:
@@ -205,7 +264,11 @@ def getSettings(scenario):
         budget = 350
     if not budget and rowsbool:
         budget = 500
-
+    # 7,1 = informed, 12 days
+    # 7,2 = uninformed 12 days
+    # 8,1 = informed 12 days, starting with blank worldmodel
+    # 8,2 = uninformed 12 days, starting with blank worldmodel
+    # 9 (1,2,3,4) = same as 1 (1,2,3,4) = budget testing but then with uniform uncertainty matrix
     # returning all the settings
     return [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
 def getDisease(name):
@@ -245,10 +308,12 @@ def prepandtest():
     preparing = False
     if preparing:
         # variant = [field, weedbool, weed/pathogen type]
-        for rowsbool in [True,False]:
+        for rowsbool in [False,True]:
            #for variant in scenariovariants:
-           variant = scenariovariants[-1]
-           if variant == scenariovariants[-1]: #quick workaround
+           variant = ["rectangle", False, "pathogen2"]
+           if variant == ["rectangle", False, "pathogen2"]:
+           # variant = scenariovariants[-1]
+           # if variant == scenariovariants[-1]: #quick workaround
                # Choose the field shape:
                # Receive: field_matrix, field_vertex
                if variant[0]=="convex":
@@ -279,11 +344,11 @@ def prepandtest():
                        pathogen = Pathogen(patchnr=3, infectionduration=4, spreadrange=5, reproductionfraction=0.5,reproductionrate=2, standarddeviation=0.3, saturation=5)
                    else:
                        # two patches
-                       pathogen = Pathogen(patchnr=2, infectionduration=4, spreadrange=3, reproductionfraction=0.5,
+                       pathogen = Pathogen(patchnr=2, infectionduration=2, spreadrange=3, reproductionfraction=0.3,
                                         reproductionrate=2, standarddeviation=0.3, saturation=5)
 
                    spread_matrix, worldmodel_matrix, uncertainty_matrix = pathogenspread(field_matrix, plant_matrix,
-                                                                                         pathogen, False)
+                                                                                         pathogen, True)
                    for i in range(1, 13):
                        reproductionrate = np.random.normal(pathogen.reproductionrate, pathogen.reproductionrateSTD)
                        rates.append(reproductionrate)
@@ -304,7 +369,8 @@ def prepandtest():
                print(np.nansum(uncertainty_matrix))
                # Execute planning
                # Receive: samplelocations
-               if scenariovariants.index(variant)%4==0:
+               #if scenariovariants.index(variant)%4==0:
+               if True:
 
                    matrices = None  # initialize for first day
                    scenariosettings = None
@@ -345,7 +411,7 @@ def prepandtest():
                np.save(pathname + '/matrices1.npy', matrices[1])
                # np.save(pathname + '/matrices2.npy', matrices[2])
                # np.save(pathname + '/matrices3.npy', matrices[3])
-
+               np.save(pathname + '/plant_matrix.npy',plant_matrix)
                np.save(pathname + '/spread_matrix.npy',spread_matrix)
                np.save(pathname + '/worldmodel_matrix.npy',worldmodel_matrix)
                np.save(pathname + '/uncertainty_matrix.npy',uncertainty_matrix)
@@ -371,15 +437,19 @@ def prepandtest():
                         [4, 1], [4, 2], [4, 3], [4, 4], [4, 5], [4, 6], [4, 7], [4, 8],
                         [5, 1], [5, 2], [5, 3], [5, 4],
                         [6, 1], [6, 2], [6, 3], [6, 4]]
-        for scenario in scenariolist[5:]:
+        #for scenario in scenariolist[30:]:
+        for scenario in [[8, 1],[8,2]]:
+        #for scenario in [[9,1],[9,2],[9,3],[9,4]]:
             scenariosettings = getSettings(scenario)
             # scenariosettings = [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
 
             # variant = [field, weedbool, weed/pathogen type]
             rowsbool = scenariosettings[0]
             #for variant in scenariovariants:
-            variant = scenariovariants[-1]
-            if variant == scenariovariants[-1]:  # quick workaround
+            variant = ["rectangle", False, "pathogen2"]
+            if variant == ["rectangle", False, "pathogen2"]:
+            #variant = scenariovariants[-1]
+            #if variant == scenariovariants[-1]:  # quick workaround
 
                 if rowsbool:
                     pathname = str("../Testing_files/rows/")+str(variant[0])+str(variant[2])
@@ -391,14 +461,23 @@ def prepandtest():
                     field_vertex = np.load(pathname + '/field_vertex.npy', allow_pickle=True)
                 else:
                     pathname = str("../Testing_files/norows/") + str(variant[0]) + str(variant[2])
+                plant_matrix= np.load(pathname+'/plant_matrix.npy')
                 spread_matrix= np.load(pathname+'/spread_matrix.npy')
                 worldmodel_matrix= np.load(pathname+'/worldmodel_matrix.npy')
                 uncertainty_matrix =  np.load(pathname+'/uncertainty_matrix.npy')
+                if scenario[0] ==8: # start with blank worldmodel (no previous knowledge)
+                    print("Start with blank worldmodel")
+                    plant_matrix = np.load(str("../Testing_files/norows/") + str(variant[0]) + str(
+                        variant[2]) + '/plant_matrix.npy', allow_pickle=True)
+                    worldmodel_matrix = deepcopy(plant_matrix)
+                    worldmodel_matrix[worldmodel_matrix >= 0.0] = 0
+                if scenario==[2,2] or scenario==[2,4] or scenario[0]==8 or scenario[0]==9: # uniform uncertainty matrix
+                    plant_matrix = np.load(str("../Testing_files/rows/")+str(variant[0])+str('pathogen1') + '/plant_matrix.npy', allow_pickle=True)
+                    uncertainty_matrix = deepcopy(plant_matrix)
+                    uncertainty_matrix[uncertainty_matrix >= 0.0] = 0.001
 
                 matrices0 = np.load(pathname+'/matrices0.npy')
                 matrices1 = np.load(pathname+'/matrices1.npy')
-                # matrices2 = np.load(pathname+'/matrices2.npy')
-                # matrices3 = np.load(pathname+'/matrices3.npy')
                 matrices = [matrices0,matrices1]
 
                 if scenario==[1,1] or scenario==[1,5]:
@@ -423,12 +502,28 @@ def prepandtest():
                 scenariosettings.append(pathname) # such that files can also be saved within the algorithm
 
                 time_start = time.process_time()
-                if scenario[0]==6:
-                    for dailyuncertainty in [0,0.001,0.01]:
+                if scenario[0]==6 or scenario[0]==7 or scenario[0]==8:
+                    #for dailyuncertainty in [0,0.001,0.01]:
+                    dailyuncertainty=0
+                    if dailyuncertainty==0:
                         print("Long simulations")
                         time_start = time.process_time()
                         total_days = 12
                         for day in range(1, total_days + 1):
+                            if scenario == [7, 1] or scenario == [8, 1]:
+                                samplelocations = []
+                            elif scenario == [7, 2] or scenario == [8, 2]:
+                                pathname_x = str("../Result_files/norows/") + str([scenario[0], 1]) + str("/") + str(
+                                variant[0]) + str(variant[2] + "/")
+                                samplelocations = np.load(pathname_x + str(day) + '_samplelocations.npy')
+                            if scenario==[7,2] or scenario==[8,2]:
+                                plant_matrix = np.load(str("../Testing_files/norows/") + str(variant[0]) + str(
+                                    variant[2]) + '/plant_matrix.npy', allow_pickle=True)
+                                uncertainty_matrix = deepcopy(plant_matrix)
+                                uncertainty_matrix[uncertainty_matrix >= 0.0] = 0.001
+                                if scenario==[8,2] and day>1:
+                                    for cell in infopath:
+                                        uncertainty_matrix[cell[1], cell[0]]=0
                             scenariosettings[-1]=pathname+str(day)
                             reproductionrate=reproductionrates[day-1]
                             if rowsbool:
@@ -443,6 +538,8 @@ def prepandtest():
                             time_end = time.process_time()
                             totaltime = time_end - time_start
                             # Saving the results per day
+                            np.save(pathname + str(day)+'_samplelocations.npy', samplelocations_new)
+
                             np.save(pathname + str(day)+'_finalpath.npy', finalpath)
                             np.save(pathname + str(day)+'_infopath.npy', infopath)
                             np.save(pathname + str(day)+'_finalcost.npy', finalcost)
@@ -461,6 +558,8 @@ def prepandtest():
                             [spread_matrix, worldmodel_matrix, uncertainty_matrix] = updatematrix(
                                 disease, plant_matrix, spread_matrix, worldmodel_matrix, uncertainty_matrix, infopath,
                                 0,dailyuncertainty, reproductionrate,False)
+
+                            mpl.pyplot.close('all')
 
                 else:
                     print("Single simulations")
@@ -495,12 +594,12 @@ def default():
     # Choose the field shape:
     #[field_matrix,field_vertex] = polygon("hexagon_small",True)
     [field_matrix,field_vertex] = polygon("rectangle",False)
-    #[field_matrix,field_vertex] = polygon("hexagon_convex",False)
+    #[field_matrix,field_vertex] = polygon("hexagon_convex",True)
     #[field_matrix,field_vertex] = polygon("hexagon_concave",True)
     #[field_matrix,field_vertex] = polygon("rectangle_obstacle",True)
-    rowsbool = False
+    rowsbool = True
     if rowsbool:
-        [plant_matrix,row_nrs,row_edges,field_vertex] = withrows(field_matrix,2,1,field_vertex,False)
+        [plant_matrix,row_nrs,row_edges,field_vertex] = withrows(field_matrix,2,3,field_vertex,False)
 
     else:
         plant_matrix = norows(field_matrix,2,False)

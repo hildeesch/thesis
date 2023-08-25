@@ -1522,7 +1522,10 @@ class IRrtStar:
             bestpath.append(copynode) #
             #bestpath.append(node)
             #infosteps.append(node.info-node.parent.info)
-            infosteps.append((node.info-node.parent.info)/(node.cost-node.parent.cost)) # density of increase of info
+            if node.cost-node.parent.cost>0:
+                infosteps.append((node.info-node.parent.info)/(node.cost-node.parent.cost)) # density of increase of info
+            else:
+                infosteps.append(0)
             # the infosteps contain the added info for the parent to the node (of that node)
             prev_copynode=copynode
             node=node.parent
@@ -1779,6 +1782,22 @@ class IRrtStar:
         end = [x_rand.x, x_rand.y]
         [infopath, cost] = self.search(start, end)
 
+        # TODO: remove later (this was for viz purposes)
+        # fig, ax = plt.subplots()
+        # tempmatrix = self.uncertaintymatrix
+        # tempmatrix[tempmatrix>0]=0
+        # colormap = cm.Greys
+        # colormap.set_bad(color='black')
+        # im = ax.imshow(self.uncertaintymatrix, cmap=colormap, vmin=0, vmax=1, origin='lower', extent=[0, 100, 0, 100])
+        # for step in infopath:
+        #     plt.plot(step[0]+1, step[1], "bs", linewidth=3)
+        # plt.plot(start[0]+10, start[1], "gs", linewidth=3)
+        # plt.plot(end[0]+1, end[1], "rs", linewidth=3)
+
+
+        #fig.tight_layout()
+        #plt.show()
+
         for i in range(len(infopath)):
             # TODO decide whether it's allowed to sample a vertex
             # boolvertex = False
@@ -1803,6 +1822,13 @@ class IRrtStar:
                             x_rand.y) + ") - dist = " + str(dist) + " - x_new=(" + str(xpoint) + "," + str(
                             ypoint) + ")")
 
+                        # TODO: remove later (this was for viz purposes)
+                        # plt.plot(xpoint+1, ypoint, "yo", linewidth=3)
+                        #
+                        # # ax.set_title("Heatmap visualization")
+                        # fig.tight_layout()
+                        # plt.show()
+
                         return Node((int(xpoint), int(ypoint)))
             # sampling the Astar points:
             dist = self.FindCostInfoA(xpoint,ypoint,x_nearest.x,x_nearest.y,x_nearest,False,True)
@@ -1810,6 +1836,11 @@ class IRrtStar:
                 print("nearest=(" + str(x_nearest.x) + "," + str(x_nearest.y) + ") - x_rand=(" + str(x_rand.x) + "," + str(
                     x_rand.y) + ") - dist = " + str(dist) + " - x_new=(" + str(xpoint) + "," + str(
                     ypoint) + ")")
+
+                # TODO: remove later (this was for viz purposes)
+                # plt.plot(xpoint+1, ypoint, "yo", linewidth=3)
+                # fig.tight_layout()
+                # plt.show()
 
                 return Node((int(xpoint), int(ypoint)))
         print("no point close enough found, current dist = "+str(dist))
@@ -2326,7 +2357,7 @@ class IRrtStar:
 
 
 
-def main(uncertaintymatrix,row_nrs,row_edges,field_vertex,scenario=None,matrices=None,samplelocations=None):
+def main(uncertaintymatrix,row_nrs,row_edges,field_vertex,scenario=None,matrices=None,samplelocations=[]):
     x_start = (50, 48)  # Starting node
     #x_goal = (37, 18)  # Goal node
     x_goal = (50,48)

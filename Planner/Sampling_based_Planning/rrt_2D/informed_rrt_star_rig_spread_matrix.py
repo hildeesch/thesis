@@ -87,7 +87,7 @@ class IRrtStar:
             self.boolrewiring=True
             self.stopsetting="mild"
             self.doubleround=False
-            self.pathname=None
+            self.pathname=[]
         #self.scenario=scenario
         self.samplelocations=samplelocations
         if len(samplelocations)>0:
@@ -222,7 +222,7 @@ class IRrtStar:
                     # else:
                     #     count_down=20 #reset
                     #     print("reset countdown")
-            if k==502 and "[5," not in self.pathname: # to test up to certain iteration
+            if k==302 and "[5," not in self.pathname: # to test up to certain iteration
                 #count_down=0
                 stopcriterion=True
             # if count_down<=0:
@@ -1924,7 +1924,7 @@ class IRrtStar:
 
 
 
-def main(uncertaintymatrix,scenario=None,matrices=None,samplelocations=None):
+def main(uncertaintymatrix,scenario=None,matrices=None,samplelocations=[]):
     x_start = (50, 50)  # Starting node
     #x_goal = (37, 18)  # Goal node
     x_goal = (50,50)

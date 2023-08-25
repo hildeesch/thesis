@@ -11,14 +11,7 @@ from Planner.Sampling_based_Planning.rrt_2D import dubins_path as dubins
 from copy import deepcopy
 from shapely.geometry import Point, Polygon
 
-#fake_img = np.random.random((10, 10))
-# fake_img=np.ones((10,10))
-#
-# plt.imshow(fake_img, interpolation='none')
-# ax = plt.gca()
-# fig = plt.gcf()
 
-#fig, ax = plt.subplots()
 
 fig,ax=plt.subplots()
 #ax.plot((np.random.rand(10)),(np.random.rand(10)))
