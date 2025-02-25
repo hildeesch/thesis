@@ -27,6 +27,36 @@ from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread_rows_v2
 from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread_matrix import main as rig_matrix
 from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread_rows_matrix import main as rig_rows_matrix
 
+def getDefaultSettings():
+    # setting the defaults:
+    informed=True
+    rewiring = True
+    step_len=10
+    search_radius=20
+    budget = 350
+    stopsetting = "strict"
+    horizonplanning = False
+
+    # setting default step_len and search_radius based on the rowsbool
+    # assume no rows:
+    rowsbool =False
+    if not step_len and not rowsbool:
+        step_len = 40
+        search_radius=40
+    if not step_len and rowsbool:
+        step_len=200
+        search_radius=200
+    if not budget and not rowsbool:
+        budget = 350
+    if not budget and rowsbool:
+        budget = 500
+    # 7,1 = informed, 12 days
+    # 7,2 = uninformed 12 days
+    # 8,1 = informed 12 days, starting with blank worldmodel
+    # 8,2 = uninformed 12 days, starting with blank worldmodel
+    # 9 (1,2,3,4) = same as 1 (1,2,3,4) = budget testing but then with uniform uncertainty matrix
+    # returning all the settings
+    return [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
 
 # Press Shift+F10 to execute it or replace it with your code.
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
@@ -710,8 +740,9 @@ def default():
     #     print(results)
 def minimum_example():
     uncertainty_matrix = create_random_infomap()
+    default_scenario = getDefaultSettings()
     [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
-                            matrices,samplelocations] = rig_matrix(uncertainty_matrix)
+                            matrices,samplelocations] = rig_matrix(uncertainty_matrix,default_scenario)
     showpath(uncertainty_matrix,finalpath,finalcost,finalinfo,budget, steplength, searchradius, iteration,True,False)
 
     
