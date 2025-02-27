@@ -153,7 +153,7 @@ class IRrtStar:
         return x_best
 
     def planning(self):
-        show = False
+        show = True
         visualizationmode="nosteps" #steps, nosteps or False
         doubleround=self.doubleround # whether we want to plan a double path (true) or single path (false)
         rewiringafter=False
@@ -222,11 +222,10 @@ class IRrtStar:
                     # else:
                     #     count_down=20 #reset
                     #     print("reset countdown")
-            if k==302 and "[5," not in self.pathname: # to test up to certain iteration
-                #count_down=0
-                stopcriterion=True
-            # if count_down<=0:
+            # if k==302 and "[5," not in self.pathname: # to test up to certain iteration
+            #     #count_down=0
             #     stopcriterion=True
+
             if stopcriterion and (k>iter_min or k>self.iter_max-3):
                 print("Reached stopping criterion at iteration "+str(k))
                 break # iterating is stopped if stopping criterion is reached
@@ -242,7 +241,7 @@ class IRrtStar:
 
             if (k-1)%25==0 and visualizationmode=="nosteps" and k>1 and not double:  # visualize all new connections with near ndoes
                 self.fig, self.ax = plt.subplots()
-                self.animation(k-1, x_new)
+                self.animation_new(k-1, x_new)
                 if self.pathname:
                     plt.savefig(self.pathname + "animation_"+str(k-1))
                 if show:
@@ -345,8 +344,9 @@ class IRrtStar:
                             # to make sure we don't surpass the original budget in round 1, we add that every parent also has to be a solution
                             #self.X_soln.add(node_new)
                             self.X_soln.append(node_new)
-
-
+                if node_new!=[]: # so it has actually been assigned
+                   self.Pruning(node_new)
+                self.Rewiring_new(x_new)
                 #print("node_new: ("+str(node_new.x)+","+str(node_new.y)+")")
                 if visualizationmode=="steps" and not double: # visualize all new connections with near ndoes
                     self.fig, self.ax = plt.subplots()
@@ -360,7 +360,7 @@ class IRrtStar:
                     self.animation(k,x_new,1)
                 if node_new!=[]: # so it has actually been assigned
                     timestart=time.time()
-                    self.Pruning(node_new)
+                    # self.Pruning(node_new)
                     timeend = time.time()
                     self.time[6] += (timeend - timestart)
                     if visualizationmode=="steps" and not double: # show all connections after pruning
@@ -379,6 +379,7 @@ class IRrtStar:
                 #print(self.time)
                 if k>0:
                     print("It.: " + str(k) + " Time: " + str(self.time[7]) + " Info: " + str(x_best.info) + " Tot. info: "+str(x_best.totalinfo) + " Cost: " + str(x_best.cost) + " Totalcost: "+str(x_best.totalcost) +" Nodes: "+str(len(self.V)))
+                    print("Check check: i_best = ", i_best)
                     # if k==200:
                     #     for i in range(10): # rewire the 10 best nodes
                     #         info = {node: node.totalinfo for node in self.X_soln}
@@ -877,7 +878,7 @@ class IRrtStar:
 
         if infopath == None:
 
-            dt = 1 / (2 * distance)
+            dt = 1 / (4 * distance)
             t = 0
             info = 0
             infopath = []
@@ -945,7 +946,8 @@ class IRrtStar:
                     dist = self.Line(parent, node)
                     node.info = parent.info + self.FindInfo(node.x, node.y, parent.x, parent.y, parent,
                                                             dist, True)
-
+                if parent.cost+dist > self.budget and (node in self.X_soln):
+                    print("ERROR ERROR ERROR: Recalculating - old cost: ",node.cost," New cost: ",(parent.cost+dist))
                 node.cost = parent.cost + dist
                 if node.round==2:
                     if [node.x,node.y]==[self.x_start.x,self.x_start.y]: # start of round 2
@@ -955,7 +957,52 @@ class IRrtStar:
 
 
                 self.LastPath(node)
-                self.Recalculate(node)
+                if (node not in self.X_soln) and (node.totalcost<=self.budget):
+                    self.X_soln.append(node)
+                # else: # only nodes in x_soln can have children
+                #     self.Recalculate(node)  # recalculates the cost and info for nodes further down the path
+                self.Recalculate(node)  # recalculates the cost and info for nodes further down the path
+
+    def Rewiring_new(self,x_new):
+        for x_near in self.Near(self.V, x_new, self.search_radius,False):
+            if x_near!=self.x_start and x_near.parent!=self.x_start:
+                c_near = x_near.cost
+                c_new = x_near.parent.parent.cost + self.Line(x_near.parent.parent, x_new) + self.Line(x_new,x_near)            
+                # I think this doesn't apply in our case:
+                # if x_new.parent.x==x_near.x and x_new.parent.y==x_near.y:
+                #     return # if the parent of x_new = x_near, we don't want to make the parent of x_near = x_new (because then we create a loose segment
+
+                # determine the gained info in the rewiring segment
+                i_cur_segment = x_near.info - x_near.parent.parent.info
+
+                if c_new < c_near and i_cur_segment==0: #note: this is different than the condition in pruning
+                    # Create the new node at the newly sampled location
+                    newnode = Node((x_new.x, x_new.y))
+                    newnode.parent = x_near.parent.parent
+                    newnode.info = x_near.parent.parent.info + self.FindInfo(x_new.x, x_new.y,
+                                                                            x_near.parent.parent.x,
+                                                                                x_near.parent.parent.y, 
+                                                                                x_near.parent.parent,
+                                                                                self.search_radius,
+                                                                                True)
+                    newnode.cost = x_near.parent.parent.cost + self.Line(x_near.parent.parent, x_new)
+                    self.V.append(newnode)
+                    self.LastPath(newnode)
+                    if newnode.totalcost<=self.budget:
+                        self.X_soln.append(newnode)
+
+                    info = newnode.info + self.FindInfo(x_near.x, x_near.y, newnode.x, newnode.y, newnode,
+                                                        self.search_radius, True)
+                    # Rewire the near node to the new node
+                    x_near.cost = c_new
+                    x_near.info = info
+                    x_near.parent = newnode
+                    if (x_near not in self.X_soln) and (x_near.totalcost<=self.budget):
+                        self.X_soln.append(x_near)
+                    # else: # only nodes in x_soln can have children
+                    #     self.Recalculate(x_near)  # recalculates the cost and info for nodes further down the path
+                    self.Recalculate(x_near)  # recalculates the cost and info for nodes further down the path
+                    # print("Rewiring took place!! New cost: ", x_near.cost, " Old cost: ", c_near)        
 
     def Rewiring_after(self, best_node): #rewiring afterwards
         # goal: gain more info while remaining within the budget
@@ -1294,7 +1341,9 @@ class IRrtStar:
         for index, node1 in enumerate(nodelist):
             for index2,node2 in enumerate(nodelist):
                 #if (node2.cost<=node1.cost and node2.info>node1.info): #prune lesser paths or doubles
+                # most recent: 
                 if (node2.cost<=node1.cost and node2.info>node1.info) or (node2.cost<node1.cost and node2.info==node1.info) or (node1.parent==node2.parent and index!=index2): #prune lesser paths or doubles
+                # more cons: if (node2.cost<=node1.cost and node2.info>node1.info and (node1.info-node1.parent.info)==0) or (node2.cost<node1.cost and node2.info==node1.info and (node1.info-node1.parent.info)==0) or (node1.parent==node2.parent and index!=index2): #prune lesser paths or doubles
                 #if (node2.cost <= node1.cost and node2.info > node1.info) or (node1.parent == node2.parent and index != index2):  # prune lesser paths or doubles
 
                         # print("node 1 =("+str(node1.x)+","+str(node1.y)+") parent =("+str(node1.parent.x)+","+str(node1.parent.y)+")")
@@ -1766,6 +1815,91 @@ class IRrtStar:
         #print(rounded/math.pi)
 
         return rounded, int
+    def animation_new(self, k=None, x_new=None, pruningstep=False):
+        """
+        Improved visualization for the RIG algorithm.
+        """
+        if pruningstep != 2:
+            self.ax.clear()  # Clears only the plot, keeping the figure
+
+        # Set modern dark background
+        self.ax.set_facecolor("#1E1E1E")  # Dark gray background
+
+        # Define line colors
+        color_line = "-r" if pruningstep == 1 else "-g"
+
+        # Title update
+        if k and pruningstep != 2:
+            self.plot_grid_new(f"RIG, k = {k}, new node = ({x_new.x},{x_new.y})")
+        elif not k:
+            self.plot_grid_new(f"RIG, k_max = {self.iter_max}")
+
+        # Handle Dubins / Reeds-Shepp paths
+        if self.kinematic in ["dubins", "reedsshepp", "reedsshepprev"]:
+            for node in self.V:
+                if node != self.x_start:
+                    cost, angleparent, dubins_x, dubins_y, infopath = self.getDubins(node.parent, node)
+                    path = list(zip(dubins_x, dubins_y))
+                    for i in range(0, len(path) - 10, 10):
+                        plt.plot([path[i][0], path[i + 10][0]], [path[i][1], path[i + 10][1]], "-g", alpha=0.6)
+
+        else:  # Regular case (non-holonomic)
+            if pruningstep == 2:
+                for node in self.V:
+                    if node.parent:
+                        plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-w", alpha=0.2)
+            
+            for node in self.V:
+                if node.parent:
+                    plt.plot([node.x, node.parent.x], [node.y, node.parent.y], color_line, alpha=0.7, linewidth=0.5)
+                elif node != self.x_start:
+                    plt.scatter(node.x, node.y, color="blue", s=15)  # Small nodes
+
+            # Draw the best path in bold blue
+            if self.x_best != self.x_start:
+                node = self.x_best
+                while node.parent:
+                    plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-b", linewidth=2.5)
+                    node = node.parent
+
+        # Highlight new node
+        if x_new:
+            plt.scatter(x_new.x, x_new.y, color="yellow", s=40, edgecolors="black", linewidth=1.2, zorder=3)
+
+        # Set limits, styling
+        plt.xlim([0, 100])
+        plt.ylim([0, 100])
+        self.ax.set_xlim([0, 100])
+        self.ax.set_ylim([0, 100])
+        self.ax.set_xticks([])
+        self.ax.set_yticks([])
+        self.ax.spines['top'].set_visible(False)
+        self.ax.spines['right'].set_visible(False)
+        # Draw a grid overlay (every 5 units, adjust as needed)
+        self.ax.set_xticks(range(0, 100))
+        self.ax.set_yticks(range(0, 100))
+        self.ax.grid(True, color="grey", linestyle="--", linewidth=0.5, alpha=0.3)
+
+        # Apply layout
+        self.fig.tight_layout()
+        plt.pause(0.01)  # Smooth real-time updates
+
+    def plot_grid_new(self, name):
+        """
+        Improved grid visualization with better color mapping.
+        """
+        colormap = cm.Blues
+        colormap.set_bad(color='black')
+
+        self.ax.imshow(self.uncertaintymatrix, cmap=colormap, vmin=0, vmax=1, origin='lower', extent=[-0.5, 99.5, -0.5, 99.5])  # Aligns pixel centers correctly)
+
+        # Mark start and goal positions
+        plt.scatter(self.x_start.x, self.x_start.y, color="cyan", s=80, edgecolors="black", linewidth=2, label="Start")
+        plt.scatter(self.x_goal.x, self.x_goal.y, color="red", s=80, edgecolors="black", linewidth=2, label="Goal")
+
+        plt.title(name, fontsize=12, color="white")
+        # plt.legend(facecolor="#1E1E1E", edgecolor="white", fontsize=10)
+
     def animation(self, k=None,x_new=None, pruningstep=False):
         if pruningstep!=2:
             plt.cla()
@@ -1833,6 +1967,12 @@ class IRrtStar:
         plt.ylim([0, 100])
         self.ax.set_xlim([0, 100])
         self.ax.set_ylim([0, 100])
+
+        # Draw a grid overlay (every 5 units, adjust as needed)
+        # self.ax.set_xticks(range(0, 100))
+        # self.ax.set_yticks(range(0, 100))
+        # self.ax.grid(True, color="grey", linestyle="--", linewidth=0.5, alpha=0.3)
+
 
         self.fig.tight_layout()
         plt.pause(0.01)
@@ -1925,14 +2065,18 @@ class IRrtStar:
 
 
 def main(uncertaintymatrix,scenario=None,matrices=None,samplelocations=[]):
+    # mid:
     x_start = (50, 50)  # Starting node
     #x_goal = (37, 18)  # Goal node
     x_goal = (50,50)
+    # edge:
+    x_start = (50,0)
+    x_goal = (50,0)
     # scenario = [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
     if scenario:
-        rrt_star = IRrtStar(x_start, x_goal, scenario[4], 0.0, scenario[5], 1000, uncertaintymatrix, scenario, matrices, samplelocations)
+        rrt_star = IRrtStar(x_start, x_goal, scenario[4], 0.0, scenario[5], 300, uncertaintymatrix, scenario, matrices, samplelocations)
     else:
-        rrt_star = IRrtStar(x_start, x_goal, 15, 0.0, 15, 1000,uncertaintymatrix,scenario,matrices,samplelocations)
+        rrt_star = IRrtStar(x_start, x_goal, 15, 0.0, 15, 300,uncertaintymatrix,scenario,matrices,samplelocations)
     [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,matrices,samplelocations]=rrt_star.planning()
 
     return finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration, matrices,samplelocations
