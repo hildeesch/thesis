@@ -24,7 +24,7 @@ from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread import 
 from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread_rows import main as rig_rows
 from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread_rows_v2 import main as rig_rows_v2
 
-from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread_matrix import main as rig_matrix
+from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread_matrix_restructured import main as rig_matrix
 from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread_rows_matrix import main as rig_rows_matrix
 
 def getDefaultSettings(informed=True,rewiring=True,
@@ -747,7 +747,18 @@ def minimum_example():
                             matrices,samplelocations] = rig_matrix(uncertainty_matrix,default_scenario)
     showpath(uncertainty_matrix,finalpath,finalcost,finalinfo,budget, steplength, searchradius, iteration,True,False)
 
-    
+def multi_robot(): # NOT FUNCTIONAL YET AT ALL
+    total_robots=4
+    matrices=None #initialize for first day
+    scenariosettings=None
+    uncertainty_matrix = create_random_infomap(type="point",source_nr=30)
+
+    for day in range(1,total_robots+1):
+        
+        [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
+                            matrices,samplelocations] = rig_matrix(uncertainty_matrix,scenariosettings,matrices)
+
+
 
 
 if __name__ == '__main__':
