@@ -29,7 +29,7 @@ from Planner.Sampling_based_Planning.rrt_2D.informed_rrt_star_rig_spread_rows_ma
 
 def getDefaultSettings(informed=True,rewiring=True,
 step_len=10,search_radius=20,budget=350,
-stopsetting="strict",horizonplanning=False,rowsbool=False):
+stopsetting="strict",multirobot=False,rowsbool=False):
     # setting the defaults:
     informed=informed
     rewiring = rewiring
@@ -37,7 +37,7 @@ stopsetting="strict",horizonplanning=False,rowsbool=False):
     search_radius=search_radius
     budget = budget
     stopsetting = stopsetting
-    horizonplanning = horizonplanning
+    multirobot = multirobot
 
     # setting default step_len and search_radius based on the rowsbool
     # assume no rows:
@@ -53,7 +53,7 @@ stopsetting="strict",horizonplanning=False,rowsbool=False):
     # if not budget and rowsbool:
     #     budget = 500
     # returning all the settings
-    return [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
+    return [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, multirobot]
 
 # Press Shift+F10 to execute it or replace it with your code.
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
@@ -64,7 +64,7 @@ def getSettings(scenario):
     step_len = None
     budget = None
     stopsetting = "strict"
-    horizonplanning = False
+    multirobot = False
 
     # setting the scenario based on the tested variable
     match scenario[0]:
@@ -209,41 +209,41 @@ def getSettings(scenario):
                 case 1:
                     print("Horizon - no rows")
                     rowsbool=False
-                    horizonplanning=True
+                    multirobot=True
                 case 2:
                     print("Single path - no rows")
                     rowsbool=False
-                    horizonplanning=False
+                    multirobot=False
                 case 3:
                     print("Horizon - rows")
                     rowsbool=True
-                    horizonplanning=True
+                    multirobot=True
                 case 4:
                     print("Single path - rows")
                     rowsbool=True
-                    horizonplanning=False
+                    multirobot=False
         case 7:
             print("Var: Long simulations, testing informedness")
             match scenario[1]:
                 case 1:
                     print("No rows, informed")
                     rowsbool = False
-                    horizonplanning = False
+                    multirobot = False
                 case 2:
                     print("No rows, uninformed")
                     rowsbool = False
-                    horizonplanning = False
+                    multirobot = False
         case 8:
             print("Var: Long simulations, testing informedness starting with blank worldmodel")
             match scenario[1]:
                 case 1:
                     print("No rows, informed")
                     rowsbool = False
-                    horizonplanning = False
+                    multirobot = False
                 case 2:
                     print("No rows, uninformed")
                     rowsbool = False
-                    horizonplanning = False
+                    multirobot = False
         case 9:
             print("Var: budget, uncertaintymatrix = uniform")
             match scenario[1]:
@@ -298,7 +298,7 @@ def getSettings(scenario):
     # 8,2 = uninformed 12 days, starting with blank worldmodel
     # 9 (1,2,3,4) = same as 1 (1,2,3,4) = budget testing but then with uniform uncertainty matrix
     # returning all the settings
-    return [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
+    return [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, multirobot]
 def getDisease(name):
     if name == "pathogen1":
         disease = Pathogen(patchnr=3, infectionduration=4, spreadrange=5, reproductionfraction=0.5, reproductionrate=2,
@@ -469,7 +469,7 @@ def prepandtest():
         for scenario in [[8, 1],[8,2]]:
         #for scenario in [[9,1],[9,2],[9,3],[9,4]]:
             scenariosettings = getSettings(scenario)
-            # scenariosettings = [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
+            # scenariosettings = [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, multirobot]
 
             # variant = [field, weedbool, weed/pathogen type]
             rowsbool = scenariosettings[0]
@@ -739,7 +739,7 @@ def minimum_example():
     #uncertainty_matrix = create_random_infomap()
     uncertainty_matrix = create_random_infomap(type="point",source_nr=30)
     # default: informed=True,rewiring=True,step_len=10,search_radius=20,budget=350,
-    #    stopsetting="strict",horizonplanning=False,rowsbool=False
+    #    stopsetting="strict",multirobot=False,rowsbool=False
     default_scenario = getDefaultSettings(stopsetting="mild",step_len=40,budget=600)
     pathname = [] # empty pathname
     default_scenario.append(pathname) # such that files can also be saved within the algorithm
@@ -748,15 +748,18 @@ def minimum_example():
     showpath(uncertainty_matrix,finalpath,finalcost,finalinfo,budget, steplength, searchradius, iteration,True,False)
 
 def multi_robot(): # NOT FUNCTIONAL YET AT ALL
-    total_robots=4
+    total_robots=2
     matrices=None #initialize for first day
     scenariosettings=None
     uncertainty_matrix = create_random_infomap(type="point",source_nr=30)
+    default_scenario = getDefaultSettings(stopsetting="mild",step_len=40,budget=600, multirobot=total_robots)
+    pathname = [] # empty pathname
+    default_scenario.append(pathname) # such that files can also be saved within the algorithm
 
-    for day in range(1,total_robots+1):
+    # for day in range(1,total_robots+1):
         
-        [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
-                            matrices,samplelocations] = rig_matrix(uncertainty_matrix,scenariosettings,matrices)
+    [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
+                            matrices,samplelocations] = rig_matrix(uncertainty_matrix,default_scenario)
 
 
 
@@ -764,6 +767,7 @@ def multi_robot(): # NOT FUNCTIONAL YET AT ALL
 if __name__ == '__main__':
     #default()
     #prepandtest()
-    minimum_example()
+    #minimum_example()
+    multi_robot()
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
