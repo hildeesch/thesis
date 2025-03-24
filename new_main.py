@@ -7,6 +7,7 @@ from monitortreat import showpathlong
 from monitortreat import updatematrix
 from spreading import weedsspread
 from spreading import pathogenspread
+from budgeted_coverage import max_coverage
 import numpy as np
 import time
 from copy import deepcopy
@@ -752,8 +753,9 @@ def multi_robot(): # NOT FUNCTIONAL YET AT ALL
     matrices=None #initialize for first day
     scenariosettings=None
     uncertainty_matrix = create_random_infomap(type="point",source_nr=30)
-    default_scenario = getDefaultSettings(stopsetting="mild",step_len=40,budget=600, multirobot=total_robots)
-    pathname = [] # empty pathname
+    default_scenario = getDefaultSettings(stopsetting="mild",step_len=30,budget=400, multirobot=total_robots)
+    #pathname = [] # empty pathname
+    pathname = str("Figures/Savefolder/")
     default_scenario.append(pathname) # such that files can also be saved within the algorithm
 
     # for day in range(1,total_robots+1):
@@ -763,11 +765,15 @@ def multi_robot(): # NOT FUNCTIONAL YET AT ALL
 
 
 
+def coverage():
+    uncertainty_matrix = create_random_infomap(type="point",source_nr=30)
+    max_coverage(uncertainty_matrix,150)
 
 if __name__ == '__main__':
     #default()
     #prepandtest()
     #minimum_example()
-    multi_robot()
+    #multi_robot()
+    coverage()
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/

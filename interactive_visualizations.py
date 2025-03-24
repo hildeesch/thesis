@@ -12,17 +12,17 @@ from copy import deepcopy
 from shapely.geometry import Point, Polygon
 
 
+def init():
+    fig,ax=plt.subplots()
+    #ax.plot((np.random.rand(10)),(np.random.rand(10)))
+    plt.ylim((0,10))
+    plt.xticks([0,1,2,3,4,5,6,7,8,9,10])
+    plt.yticks([0,1,2,3,4,5,6,7,8,9,10])
+    plt.xlim((0,10))
 
-fig,ax=plt.subplots()
-#ax.plot((np.random.rand(10)),(np.random.rand(10)))
-plt.ylim((0,10))
-plt.xticks([0,1,2,3,4,5,6,7,8,9,10])
-plt.yticks([0,1,2,3,4,5,6,7,8,9,10])
-plt.xlim((0,10))
-
-linepoints = np.array([])
-color="-b"
-draw="line" #whether we want to draw an angle or a line
+    linepoints = np.array([])
+    color="-b"
+    draw="line" #whether we want to draw an angle or a line
 
 
 
@@ -236,4 +236,5 @@ def plotLines():
 
 if __name__ == '__main__':
     #plotLines()
+    init()
     interactivePlot()

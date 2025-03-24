@@ -113,9 +113,9 @@ class IRrtStar:
 
     def init(self):
         self.x_best = self.x_start
-        self.show = True
-        self.visualizationmode ="nosteps" #steps, nosteps or False
-        self.rewiringafter = False
+        self.show = False
+        self.visualizationmode ="steps" #steps, nosteps or False
+        self.rewiringafter = True #TODO: why is this there? doesn't seem intuitive
         return 
 
     def planning(self):
@@ -132,6 +132,8 @@ class IRrtStar:
         double=False # for viz purposes it is defined here
         while k<self.iter_max:
             k+=1
+            if k==25:
+                self.visualizationmode="nosteps" # change it after x iterations for less visualizations
             if k>=3-3: #only evaluate from when we might want it to stop
                 cost = {node: node.totalcost for node in self.X_soln}
                 info = {node: node.totalinfo for node in self.X_soln}
@@ -168,6 +170,7 @@ class IRrtStar:
             if (k-1)%25==0 and self.visualizationmode=="nosteps" and k>1 and not double:  # visualize all new connections with near ndoes
                 self.fig, self.ax = plt.subplots()
                 self.animation_new(k-1, x_new)
+                #self.animation(k-1, x_new)
                 if self.pathname:
                     plt.savefig(self.pathname + "animation_"+str(k-1))
                 if self.show:
@@ -187,7 +190,10 @@ class IRrtStar:
                     x_rand = self.SampleFreeSpace()
             if self.visualizationmode=="steps" and not double:  # visualize all new connections with near ndoes
                 self.fig, self.ax = plt.subplots()
-                self.animation(k, x_rand)
+                # self.animation(k, x_rand)
+                self.animation_new(k, x_rand)
+                if self.pathname:
+                    plt.savefig(self.pathname + "animation_"+str(k-1)+"_1_nearnodes")                
                 if self.show:
                     plt.show()
                 else:
@@ -251,6 +257,22 @@ class IRrtStar:
                             # if a node_new is in round 2, it is allowed to have a double budget
                             # to make sure we don't surpass the original budget in round 1, we add that every parent also has to be a solution
                             self.X_soln.append(node_new)
+                # Visualization before pruning
+                if self.visualizationmode=="steps" and not double: # visualize all new connections with near ndoes
+                    self.fig, self.ax = plt.subplots()
+                    # self.animation(k,x_new,3)
+                    self.animation_new(k,x_new,3)
+                    if self.pathname:
+                        plt.savefig(self.pathname + "animation_"+str(k-1)+"_2_preprune")
+                    if self.show:
+                        plt.show()
+                    else:
+                        plt.close()
+                # Pruning:
+                if self.visualizationmode=="steps" and not double: # make them red to see which ones go away
+                    self.fig, self.ax = plt.subplots()
+                    # self.animation(k,x_new,1)
+                    self.animation_new(k,x_new,1)
                 if node_new!=[]: # so it has actually been assigned
                    self.Pruning(node_new) 
                 #tworoundstrategy2: first prune, then create a start of a new round for each node of the first round
@@ -259,40 +281,37 @@ class IRrtStar:
                 
                 self.Rewiring_new(x_new)
                 #print("node_new: ("+str(node_new.x)+","+str(node_new.y)+")")
-                if self.visualizationmode=="steps" and not double: # visualize all new connections with near ndoes
-                    self.fig, self.ax = plt.subplots()
-                    self.animation(k,x_new,3)
-                    if self.show:
-                        plt.show()
-                    else:
-                        plt.close()
-                if self.visualizationmode=="steps" and not double: # make them red to see which ones go away
-                    self.fig, self.ax = plt.subplots()
-                    self.animation(k,x_new,1)
+
+
                 if node_new!=[]: # so it has actually been assigned
                     timestart=time.time()
                     # self.Pruning(node_new)
                     timeend = time.time()
                     self.time[6] += (timeend - timestart)
                     if self.visualizationmode=="steps" and not double: # show all connections after pruning
-                        self.animation(k, x_new,2)
+                        # self.animation(k, x_new,2)
+                        self.animation_new(k, x_new,2)
+                        if self.pathname:
+                            plt.savefig(self.pathname + "animation_"+str(k-1)+"_3_postprune")
                         if self.show:
                             plt.show()
                         else:
                             plt.close()
             if k % 50 == 0 and not double:
                 if self.show and not self.visualizationmode:
-                   self.animation()
+                #    self.animation()
+                   self.animation_new()
                 self.time[7] = time.time()-totalstarttime
                 #print(self.time)
                 if k>0:
-                    print("It.: " + str(k) + " Time: " + str(self.time[7]) + " Info: " + str(x_best.info) + " Tot. info: "+str(x_best.totalinfo) + " Cost: " + str(x_best.cost) + " Totalcost: "+str(x_best.totalcost) +" Nodes: "+str(len(self.V)))
-                    print("Check check: i_best = ", i_best)
+                    print("It.: ", k, " Time: " ,self.time[7], " Info: ",x_best.info, " Tot. info: ",x_best.totalinfo, " Cost: ",x_best.cost, " Totalcost: ",x_best.totalcost," Round: ",x_best.round," Nodes: ",len(self.V))
+                    #print("It.: " + str(k) + " Time: " + str(self.time[7]) + " Info: " + str(x_best.info) + " Tot. info: "+str(x_best.totalinfo) + " Cost: " + str(x_best.cost) + " Totalcost: "+str(x_best.totalcost) +" Nodes: "+str(len(self.V)))
+                    #print("Check check: i_best = ", i_best)
 
 
         # Rewiring in Hindsight:
         top10info = [] #to see effect of rewiring
-        if self.rewiringafter or not self.multirobot and self.boolrewiring:
+        if self.rewiringafter or not self.multirobot and self.boolrewiring: #TODO: these ifs don't make sense to me
             info = {node: node.totalinfo for node in self.X_soln}
             topinfo = sorted(info, key=info.get)[-(1)].totalinfo
             for i in range(min(200,len(info))):  # rewire the x best nodes
@@ -344,142 +363,147 @@ class IRrtStar:
         [self.path,infopath] = self.ExtractPath(x_best)
 
         node = x_best
+        ## BEGIN OF VIZ
+        # self.animation()
+        self.animation_new()
+        plt.plot(x_best.x, x_best.y, "bs", linewidth=3)
+        plt.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
+        # making the second part of two-day paths another colour
+        secondround = False
+        for index, cell in enumerate(self.path):
+            if secondround:
+                plt.plot([self.path[index - 1][0], self.path[index][0]],
+                            [self.path[index - 1][1], self.path[index][1]], "-m")
+            if [cell[0], cell[1]] == [self.x_start.x, self.x_start.y] and index > 0 and [self.path[index - 1][0],
+                                                                                            self.path[index - 1][
+                                                                                                1]] != [self.x_start.x,
+                                                                                                        self.x_start.y] and secondround == False:
+                secondround = True
+                # print("Second round starts at index "+str(index))
 
+        #doubleroundstrategy:
+        # if path_firstround!=self.path:
+        #     print("First round is not equal to the final path")
+        #     plt.plot([x for x, _ in path_firstround], [y for _, y in path_firstround], '-c')
+        # else:
+        #     print("First round is equal to the final path")
+        #     print(len(self.X_soln),len(self.X_soln_prev))
+
+
+
+
+        #plt.plot([x for x, _ in x_best.infopath], [y for _, y in x_best.infopath], '-b')
+        #plt.plot([x for x, _ in x_best.lastinfopath], [y for _, y in x_best.lastinfopath], '-c')
+        #plt.plot([x for x, _ in self.path[:2]],[y for _, y in self.path[:2]], '-k') # to see whether the path actually ends at the goal
+        plt.pause(0.01)
         if self.show:
-            self.animation()
-            plt.plot(x_best.x, x_best.y, "bs", linewidth=3)
-            plt.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
-            # making the second part of two-day paths another colour
-            secondround = False
+            plt.show()
+        if self.pathname:
+            plt.savefig(self.pathname + "final_bestpath")
+
+        fig, ax = plt.subplots()
+        colormap = cm.Blues
+        colormap.set_bad(color='black')
+        im= ax.imshow(self.uncertaintymatrix, colormap, vmin=0, vmax=3, origin='lower')
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax)
+        # for node in nodes:
+        #     ax.plot(node[0], node[1], marker=(8, 2, 0),color="blue", linewidth=3, markersize=20)
+        for cell in infopath:
+            ax.plot(cell[0],cell[1],marker="o",markersize=1,color="blue")
+        #ax.plot(x_best.x, x_best.y, marker=(8, 2, 0), color="green", linewidth=3, markersize=20)
+        ax.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
+        # making the second part of two-day paths another colour
+        secondround = False
+        if self.multirobot:
             for index, cell in enumerate(self.path):
                 if secondround:
                     plt.plot([self.path[index - 1][0], self.path[index][0]],
-                             [self.path[index - 1][1], self.path[index][1]], "-m")
+                                [self.path[index - 1][1], self.path[index][1]], "-m")
                 if [cell[0], cell[1]] == [self.x_start.x, self.x_start.y] and index > 0 and [self.path[index - 1][0],
-                                                                                             self.path[index - 1][
-                                                                                                 1]] != [self.x_start.x,
-                                                                                                         self.x_start.y] and secondround == False:
+                                                                                                self.path[index - 1][
+                                                                                                    1]] != [self.x_start.x,
+                                                                                                            self.x_start.y]:
                     secondround = True
-                    # print("Second round starts at index "+str(index))
 
-            #doubleroundstrategy:
-            # if path_firstround!=self.path:
-            #     print("First round is not equal to the final path")
-            #     plt.plot([x for x, _ in path_firstround], [y for _, y in path_firstround], '-c')
-            # else:
-            #     print("First round is equal to the final path")
-            #     print(len(self.X_soln),len(self.X_soln_prev))
+        #doubleroundstrategy:
+        # if path_firstround!=self.path:
+        #     ax.plot([x for x, _ in path_firstround], [y for _, y in path_firstround], '-c')
 
 
-
-
-            #plt.plot([x for x, _ in x_best.infopath], [y for _, y in x_best.infopath], '-b')
-            #plt.plot([x for x, _ in x_best.lastinfopath], [y for _, y in x_best.lastinfopath], '-c')
-            #plt.plot([x for x, _ in self.path[:2]],[y for _, y in self.path[:2]], '-k') # to see whether the path actually ends at the goal
-            plt.pause(0.01)
+        ax.set_title("Spatial distribution of uncertainty and final path")
+        #fig.tight_layout()
+        if self.show:
             plt.show()
+        if self.pathname:
+            plt.savefig(self.pathname + "final_distribution")
+        # Note: now that we removed stopcriterion, we don't have the k_list anymore
+
+        # k_list_avg_der_neg=[]
+        # i_list_avg_der_neg=[]
+        # k_list_avg_der2_neg = []
+        # i_list_avg_der2_neg = []
+        # for index in range(len(self.k_list)):
+        #     if self.i_list_avg_der[index]<=0:
+        #         k_list_avg_der_neg.append(self.k_list[index])
+        #         i_list_avg_der_neg.append(self.i_list_avg_der[index])
+        #     if self.i_list_avg_der2[index]<=0:
+        #         k_list_avg_der2_neg.append(self.k_list[index])
+        #         i_list_avg_der2_neg.append(self.i_list_avg_der2[index])
+
+        # fig, ax = plt.subplots(2, 2)
+        # ax[0, 0].scatter(self.k_list, self.i_list, s=0.5)
+        # ax[0, 0].set_title("Best node info")
+        # ax[0, 1].scatter(self.k_list, self.i_list_avg, s=0.5)
+        # ax[0, 1].set_title("10 best nodes info (avg)")
+        # ax[1, 0].scatter(self.k_list, self.i_list_avg_der, s=0.5)
+        # ax[1,0].scatter(k_list_avg_der_neg, i_list_avg_der_neg,s=0.5,c='r')
+        # ax[1, 0].set_title("10 best nodes info increase 10 it")
+        # ax[1, 1].scatter(self.k_list, self.i_list_avg_der2, s=0.5)
+        # ax[1, 1].set_title("10 best nodes info increase 10 der2")
+        # plt.show()
+
+        # fig, ax = plt.subplots(4,3)
+        # ax[0,0].scatter(k_list, i_list,s=0.5)
+        # ax[0,0].set_title("Best node info")
+        # ax[0,1].scatter(k_list, i_list_inc,s=0.5)
+        # ax[0,1].set_title("Best node info increase")
+        # ax[0,2].scatter(k_list, i_list_perc,s=0.5)
+        # ax[0,2].set_title("Best node info increase %")
+        # ax[1,0].scatter(k_list, i_list_10,s=0.5)
+        # ax[1,0].set_title("10 best nodes info (avg)")
+        # #ax[1,1].scatter(k_list, i_list_inc_10)
+        # #ax[1,1].set_title("10 best nodes info increase (avg)")
+        # #ax[1,2].scatter(k_list, i_list_perc_10)
+        # #ax[1,2].set_title("10 best nodes info increase %")
+        # ax[2, 1].scatter(k_list, i_list_inc_10_avg,s=0.5)
+        # ax[2, 1].set_title("10 best nodes info increase 10 it")
+        # #ax[2, 2].scatter(k_list, i_list_perc_10_avg)
+        # #ax[2, 2].set_title("10 best nodes info increase % 10 it")
+        # ax[3, 1].scatter(k_list, i_list_inc_10_avg_der,s=0.5)
+        # ax[3, 1].set_title("10 best nodes info increase 10 der2")
+        # #ax[3, 2].scatter(k_list, i_list_perc_10_avg_der)
+        # #ax[3, 2].set_title("10 best nodes info increase % 10 der2")
+        # #ax.legend(["Best node info","Best node increase","Best node increase %","10 nodes info","10 nodes increase","10 nodes increase %"])
+        # #ax.grid()
+        # plt.show()
 
 
-            fig, ax = plt.subplots()
-            colormap = cm.Blues
-            colormap.set_bad(color='black')
-            im= ax.imshow(self.uncertaintymatrix, colormap, vmin=0, vmax=3, origin='lower')
-            divider = make_axes_locatable(ax)
-            cax = divider.append_axes("right", size="5%", pad=0.05)
-            plt.colorbar(im, cax=cax)
-            # for node in nodes:
-            #     ax.plot(node[0], node[1], marker=(8, 2, 0),color="blue", linewidth=3, markersize=20)
-            for cell in infopath:
-                ax.plot(cell[0],cell[1],marker="o",markersize=1,color="blue")
-            #ax.plot(x_best.x, x_best.y, marker=(8, 2, 0), color="green", linewidth=3, markersize=20)
-            ax.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
-            # making the second part of two-day paths another colour
-            secondround = False
-            if self.multirobot:
-                for index, cell in enumerate(self.path):
-                    if secondround:
-                        plt.plot([self.path[index - 1][0], self.path[index][0]],
-                                 [self.path[index - 1][1], self.path[index][1]], "-m")
-                    if [cell[0], cell[1]] == [self.x_start.x, self.x_start.y] and index > 0 and [self.path[index - 1][0],
-                                                                                                 self.path[index - 1][
-                                                                                                     1]] != [self.x_start.x,
-                                                                                                             self.x_start.y]:
-                        secondround = True
+        # fig, ax = plt.subplots(2, 1)
+        # ax[0].scatter(self.k_list, self.i_list_avg_der,s=0.5)
+        # ax[0].scatter(k_list_avg_der_neg, i_list_avg_der_neg,s=0.5,c='r')
+        # ax[0].set_title("10 best nodes info increase 10 it")
+        # ax[0].grid()
+        # ax[0].set_ylim((-0.05,0.05))
+        # ax[1].scatter(self.k_list, self.i_list_avg_der2,s=0.5)
+        # ax[1].scatter(k_list_avg_der2_neg, i_list_avg_der2_neg,s=0.5,c='r')
+        # ax[1].set_title("10 best nodes info increase 10 der2")
+        # ax[1].grid()
+        # ax[1].set_ylim((-0.05,0.05))
 
-            #doubleroundstrategy:
-            # if path_firstround!=self.path:
-            #     ax.plot([x for x, _ in path_firstround], [y for _, y in path_firstround], '-c')
-
-
-            ax.set_title("Spatial distribution of uncertainty and final path")
-            #fig.tight_layout()
-            plt.show()
-            # Note: now that we removed stopcriterion, we don't have the k_list anymore
-
-            # k_list_avg_der_neg=[]
-            # i_list_avg_der_neg=[]
-            # k_list_avg_der2_neg = []
-            # i_list_avg_der2_neg = []
-            # for index in range(len(self.k_list)):
-            #     if self.i_list_avg_der[index]<=0:
-            #         k_list_avg_der_neg.append(self.k_list[index])
-            #         i_list_avg_der_neg.append(self.i_list_avg_der[index])
-            #     if self.i_list_avg_der2[index]<=0:
-            #         k_list_avg_der2_neg.append(self.k_list[index])
-            #         i_list_avg_der2_neg.append(self.i_list_avg_der2[index])
-
-            # fig, ax = plt.subplots(2, 2)
-            # ax[0, 0].scatter(self.k_list, self.i_list, s=0.5)
-            # ax[0, 0].set_title("Best node info")
-            # ax[0, 1].scatter(self.k_list, self.i_list_avg, s=0.5)
-            # ax[0, 1].set_title("10 best nodes info (avg)")
-            # ax[1, 0].scatter(self.k_list, self.i_list_avg_der, s=0.5)
-            # ax[1,0].scatter(k_list_avg_der_neg, i_list_avg_der_neg,s=0.5,c='r')
-            # ax[1, 0].set_title("10 best nodes info increase 10 it")
-            # ax[1, 1].scatter(self.k_list, self.i_list_avg_der2, s=0.5)
-            # ax[1, 1].set_title("10 best nodes info increase 10 der2")
-            # plt.show()
-
-            # fig, ax = plt.subplots(4,3)
-            # ax[0,0].scatter(k_list, i_list,s=0.5)
-            # ax[0,0].set_title("Best node info")
-            # ax[0,1].scatter(k_list, i_list_inc,s=0.5)
-            # ax[0,1].set_title("Best node info increase")
-            # ax[0,2].scatter(k_list, i_list_perc,s=0.5)
-            # ax[0,2].set_title("Best node info increase %")
-            # ax[1,0].scatter(k_list, i_list_10,s=0.5)
-            # ax[1,0].set_title("10 best nodes info (avg)")
-            # #ax[1,1].scatter(k_list, i_list_inc_10)
-            # #ax[1,1].set_title("10 best nodes info increase (avg)")
-            # #ax[1,2].scatter(k_list, i_list_perc_10)
-            # #ax[1,2].set_title("10 best nodes info increase %")
-            # ax[2, 1].scatter(k_list, i_list_inc_10_avg,s=0.5)
-            # ax[2, 1].set_title("10 best nodes info increase 10 it")
-            # #ax[2, 2].scatter(k_list, i_list_perc_10_avg)
-            # #ax[2, 2].set_title("10 best nodes info increase % 10 it")
-            # ax[3, 1].scatter(k_list, i_list_inc_10_avg_der,s=0.5)
-            # ax[3, 1].set_title("10 best nodes info increase 10 der2")
-            # #ax[3, 2].scatter(k_list, i_list_perc_10_avg_der)
-            # #ax[3, 2].set_title("10 best nodes info increase % 10 der2")
-            # #ax.legend(["Best node info","Best node increase","Best node increase %","10 nodes info","10 nodes increase","10 nodes increase %"])
-            # #ax.grid()
-            # plt.show()
-
-
-            # fig, ax = plt.subplots(2, 1)
-            # ax[0].scatter(self.k_list, self.i_list_avg_der,s=0.5)
-            # ax[0].scatter(k_list_avg_der_neg, i_list_avg_der_neg,s=0.5,c='r')
-            # ax[0].set_title("10 best nodes info increase 10 it")
-            # ax[0].grid()
-            # ax[0].set_ylim((-0.05,0.05))
-            # ax[1].scatter(self.k_list, self.i_list_avg_der2,s=0.5)
-            # ax[1].scatter(k_list_avg_der2_neg, i_list_avg_der2_neg,s=0.5,c='r')
-            # ax[1].set_title("10 best nodes info increase 10 der2")
-            # ax[1].grid()
-            # ax[1].set_ylim((-0.05,0.05))
-
-            # plt.show()
-
+        # plt.show()
+        # END OF VIZ
 
 
         #doubleroundstrategy:
@@ -536,23 +560,24 @@ class IRrtStar:
             # print("Second info check = "+str(infosecondcheck))
         # final return
         matrices= [self.costmatrix,self.anglematrix]
-        if self.pathname:
-            np.save(self.pathname + 'i_list.npy', self.k_list)
-            np.save(self.pathname + 'k_list.npy', self.i_list)
-            np.save(self.pathname + 'i_list_avg_der.npy', self.i_list_avg_der)
-            np.save(self.pathname + 'i_list_avg_der2.npy', self.i_list_avg_der2)
+        # if self.pathname:
+        #     np.save(self.pathname + 'k_list.npy', self.k_list)
+        #     np.save(self.pathname + 'i_list.npy', self.i_list)
+        #     np.save(self.pathname + 'i_list_avg_der.npy', self.i_list_avg_der)
+        #     np.save(self.pathname + 'i_list_avg_der2.npy', self.i_list_avg_der2)
         return self.path, infopath, x_best.totalcost, x_best.totalinfo, self.budget, self.step_len, self.search_radius, k, matrices, self.samplelocations
 
 
     def splitDoublePath(self,initial_node):
         if initial_node.round==1 or ((initial_node.totalcost-initial_node.prevroundcost)==0): # there is no second round
+            print("No second round: Initial node totalcost: ", initial_node.totalcost," Prev round cost: ",initial_node.prevroundcost, "Pos: ",initial_node.x, initial_node.y, "Round: ", initial_node.round, "Round parent: ", initial_node.parent.round)
+
             return initial_node,None
         node=initial_node
         prev_copynode = None
         print("Initial node totalcost: ", initial_node.totalcost," Prev round cost: ",initial_node.prevroundcost, "Pos: ",initial_node.x, initial_node.y, "Round: ", initial_node.round, "Round parent: ", initial_node.parent.round)
         while node.parent:
             # copynode = deepcopy(node) # just now
-            print("node totalcost: ", node.totalcost," Prev round cost: ",node.prevroundcost, "Pos: ",node.x, node.y, "Round: ", node.round, "Round parent: ", node.parent.round)
             copynode = Node((node.x, node.y))
             copynode.info = node.info
             copynode.cost = node.cost
@@ -770,6 +795,7 @@ class IRrtStar:
             copynode.cost = node.cost
             copynode.totalinfo = node.totalinfo
             copynode.totalcost = node.totalcost
+            copynode.round = node.round
             if node==best_node:
                 copybest_node=copynode
             self.V.append(copynode)
@@ -861,6 +887,7 @@ class IRrtStar:
                                                                                     True)
                         dist = self.Line(node.parent.parent, x_near)
                         newnode.cost = node.parent.parent.cost + dist
+                        newnode.round = newnode.parent.round
                         self.LastPath(newnode)
                         info = newnode.info + self.FindInfo(x_near.x, x_near.y, node.x, node.y, newnode,
                                                             self.search_radius, True)
@@ -880,6 +907,7 @@ class IRrtStar:
                             node.parent = newnode
                             node.info = info_new
                             node.cost = c_new
+
                             self.LastPath(node)  # also recalculate the last info part
 
 
@@ -1195,7 +1223,10 @@ class IRrtStar:
         self.ax.set_facecolor("#1E1E1E")  # Dark gray background
 
         # Define line colors
-        color_line = "-r" if pruningstep == 1 else "-g"
+        path_color = "red" if pruningstep == 1 else "gray"
+        path_color_2 = "violet" # second round
+        # Define transparency
+        opacity = 0.8 if (pruningstep == 1 or pruningstep == 2 or pruningstep == 3) else 0.2
 
         # Title update
         if k and pruningstep != 2:
@@ -1207,19 +1238,29 @@ class IRrtStar:
         if pruningstep == 2:
             for node in self.V:
                 if node.parent:
-                    plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-w", alpha=0.2)
+                    plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-w", alpha=0.8)
         
         for node in self.V:
             if node.parent:
-                plt.plot([node.x, node.parent.x], [node.y, node.parent.y], color_line, alpha=0.7, linewidth=0.5)
+                if node.parent.round==2:
+                    plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-", color=path_color_2, alpha=opacity, linewidth=0.5)
+                else:
+                    plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-", color=path_color, alpha=opacity, linewidth=0.5)
             elif node != self.x_start:
                 plt.scatter(node.x, node.y, color="blue", s=15)  # Small nodes
 
         # Draw the best path in bold blue
         if self.x_best != self.x_start:
             node = self.x_best
+            if node.parent.round==2:
+                plt.plot([node.x, self.x_goal.x], [node.y, self.x_goal.y], "-m")
+            else:
+                plt.plot([node.x, self.x_goal.x], [node.y, self.x_goal.y], "-b")
             while node.parent:
-                plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-b", linewidth=2.5)
+                if node.parent.round==2:
+                    plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-m")
+                else:
+                    plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-b")
                 node = node.parent
 
         # Highlight new node
@@ -1236,9 +1277,9 @@ class IRrtStar:
         self.ax.spines['top'].set_visible(False)
         self.ax.spines['right'].set_visible(False)
         # Draw a grid overlay (every 5 units, adjust as needed)
-        self.ax.set_xticks(range(0, 100))
-        self.ax.set_yticks(range(0, 100))
-        self.ax.grid(True, color="grey", linestyle="--", linewidth=0.5, alpha=0.3)
+        #self.ax.set_xticks(range(0, 100))
+        #self.ax.set_yticks(range(0, 100))
+        #self.ax.grid(True, color="grey", linestyle="--", linewidth=0.5, alpha=0.3)
 
         # Apply layout
         self.fig.tight_layout()
@@ -1291,7 +1332,10 @@ class IRrtStar:
         if self.x_best!=self.x_start:
             node = self.x_best
             while node.parent:
-                plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-b")
+                if node.parent.round==2:
+                    plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-m")
+                else:
+                    plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-b")
                 node = node.parent
 
         # for node in self.V:
@@ -1422,7 +1466,7 @@ def main(uncertaintymatrix,scenario=None,matrices=None,samplelocations=[]):
     x_goal = (50,0)
     # scenario = [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
     if scenario:
-        rrt_star = IRrtStar(x_start, x_goal, scenario[4], 0.0, scenario[5], 150, uncertaintymatrix, scenario, matrices, samplelocations)
+        rrt_star = IRrtStar(x_start, x_goal, scenario[4], 0.0, scenario[5], 151, uncertaintymatrix, scenario, matrices, samplelocations)
     else:
         rrt_star = IRrtStar(x_start, x_goal, 15, 0.0, 15, 300,uncertaintymatrix,scenario,matrices,samplelocations)
     [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,matrices,samplelocations]=rrt_star.planning()
