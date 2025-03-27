@@ -7,7 +7,8 @@ from monitortreat import showpathlong
 from monitortreat import updatematrix
 from spreading import weedsspread
 from spreading import pathogenspread
-from budgeted_coverage import max_coverage
+from budgeted_coverage import max_coverage, animation_max_coverage
+
 import numpy as np
 import time
 from copy import deepcopy
@@ -56,566 +57,92 @@ stopsetting="strict",multirobot=False,rowsbool=False):
     # returning all the settings
     return [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, multirobot]
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 def getSettings(scenario):
     # setting the defaults:
+    rowsbool = False
     informed=True
     rewiring = True
-    step_len = None
+    step_len = 30
+    search_radius=30
     budget = None
     stopsetting = "strict"
     multirobot = False
 
-    # setting the scenario based on the tested variable
-    match scenario[0]:
+    match scenario[0]: # budget
         case 1:
-            print("Var: budget")
-            match scenario[1]:
-                case 1:
-                    print("Setting: budget = 200 - no rows")
-                    rowsbool=False
-                    budget = 200
-                case 2:
-                    print("Setting: budget = 350 - no rows")
-                    rowsbool=False
-                    budget = 350
-                case 3:
-                    print("Setting: budget = 500 - no rows")
-                    rowsbool=False
-                    budget = 500
-                case 4:
-                    print("Setting: budget = 650 - no rows")
-                    rowsbool=False
-                    budget = 650
-                case 5:
-                    print("Setting: budget = 300 - rows")
-                    rowsbool=True
-                    budget = 300
-                case 6:
-                    print("Setting: budget = 500 - rows")
-                    rowsbool=True
-                    budget = 500
-                case 7:
-                    print("Setting: budget = 700 - rows")
-                    rowsbool=True
-                    budget = 700
-                case 8:
-                    print("Setting: budget = 900 - rows")
-                    rowsbool=True
-                    budget = 900
+            budget = round((9999/100)*1) # 1 percent
         case 2:
-            print("Var: Informed vs uninformed")
-            match scenario[1]:
-                case 1:
-                    print("Informed - no rows")
-                    rowsbool=False
-                    informed = True
-                case 2:
-                    print("Uninformed - no rows")
-                    rowsbool=False
-                    informed = False
-                case 3:
-                    print("Informed - rows")
-                    rowsbool=True
-                    informed = True
-                case 4:
-                    print("Uninformed - rows")
-                    rowsbool=True
-                    informed = False
+            budget = round((9999/100)*5) # 5 percent
         case 3:
-            print("Var: Rewiring vs no rewiring")
-            match scenario[1]:
-                case 1:
-                    print("Rewiring - no rows")
-                    rowsbool=False
-                    rewiring = True
-                case 2:
-                    print("No rewiring - no rows")
-                    rowsbool=False
-                    rewiring = False
-                case 3:
-                    print("Rewiring - rows")
-                    rowsbool=True
-                    rewiring = True
-                case 4:
-                    print("No rewiring - rows")
-                    rowsbool=True
-                    rewiring = False
-        case 4:
-            print("Var: Step length and search radius")
-            match scenario[1]:
-                case 1:
-                    print("No rows - step = 20, radius = 20")
-                    rowsbool=False
-                    step_len=20
-                    search_radius=20
-                case 2:
-                    print("No rows - step = 20, radius = 40")
-                    rowsbool=False
-                    step_len=20
-                    search_radius=40
-                case 3:
-                    print("No rows - step = 40, radius = 20")
-                    rowsbool=False
-                    step_len=40
-                    search_radius=20
-                case 4:
-                    print("No rows - step = 40, radius = 40")
-                    rowsbool=False
-                    step_len=40
-                    search_radius=40
-                case 5:
-                    print("Rows - step = 100, radius = 100")
-                    rowsbool=True
-                    step_len=100
-                    search_radius=100
-                case 6:
-                    print("Rows - step = 100, radius = 200")
-                    rowsbool=True
-                    step_len=100
-                    search_radius=200
-                case 7:
-                    print("Rows - step = 200, radius = 100")
-                    rowsbool=True
-                    step_len=200
-                    search_radius=100
-                case 8:
-                    print("Rows - step = 200, radius = 200")
-                    rowsbool=True
-                    step_len=200
-                    search_radius=200
-        case 5:
-            print("Var: Stopping criteria ")
-            match scenario[1]:
-                case 1:
-                    print("Mild - no rows")
-                    rowsbool=False
-                    stopsetting="mild"
-                case 2:
-                    print("Strict - no rows")
-                    rowsbool=False
-                    stopsetting="strict"
-                case 3:
-                    print("Mild - rows")
-                    rowsbool=True
-                    stopsetting="mild"
-                case 4:
-                    print("Strict - rows")
-                    rowsbool=True
-                    stopsetting="strict"
-        case 6:
-            print("Var: Long simulations")
-            match scenario[1]:
-                case 1:
-                    print("Horizon - no rows")
-                    rowsbool=False
-                    multirobot=True
-                case 2:
-                    print("Single path - no rows")
-                    rowsbool=False
-                    multirobot=False
-                case 3:
-                    print("Horizon - rows")
-                    rowsbool=True
-                    multirobot=True
-                case 4:
-                    print("Single path - rows")
-                    rowsbool=True
-                    multirobot=False
-        case 7:
-            print("Var: Long simulations, testing informedness")
-            match scenario[1]:
-                case 1:
-                    print("No rows, informed")
-                    rowsbool = False
-                    multirobot = False
-                case 2:
-                    print("No rows, uninformed")
-                    rowsbool = False
-                    multirobot = False
-        case 8:
-            print("Var: Long simulations, testing informedness starting with blank worldmodel")
-            match scenario[1]:
-                case 1:
-                    print("No rows, informed")
-                    rowsbool = False
-                    multirobot = False
-                case 2:
-                    print("No rows, uninformed")
-                    rowsbool = False
-                    multirobot = False
-        case 9:
-            print("Var: budget, uncertaintymatrix = uniform")
-            match scenario[1]:
-                case 1:
-                    print("Setting: budget = 200 - no rows")
-                    rowsbool = False
-                    budget = 200
-                case 2:
-                    print("Setting: budget = 350 - no rows")
-                    rowsbool = False
-                    budget = 350
-                case 3:
-                    print("Setting: budget = 500 - no rows")
-                    rowsbool = False
-                    budget = 500
-                case 4:
-                    print("Setting: budget = 650 - no rows")
-                    rowsbool = False
-                    budget = 650
-                case 5:
-                    print("Setting: budget = 300 - rows")
-                    rowsbool = True
-                    budget = 300
-                case 6:
-                    print("Setting: budget = 500 - rows")
-                    rowsbool = True
-                    budget = 500
-                case 7:
-                    print("Setting: budget = 700 - rows")
-                    rowsbool = True
-                    budget = 700
-                case 8:
-                    print("Setting: budget = 900 - rows")
-                    rowsbool = True
-                    budget = 900
+            budget = round((9999/100)*10) # 10 percent
 
+    match scenario[1]: # nr of gaussians
+        case 1:
+            gaussians_nr=1
+        case 2:
+            gaussians_nr=10
+        case 3: 
+            gaussians_nr=40
+    
+    match scenario[2]: # gaussians size
+        case 1: 
+            gaussians_size = 1
+        case 2: 
+            gaussians_size = 5
+        case 3: 
+            gaussians_size = 10
 
-    # setting default step_len and search_radius based on the rowsbool
-    if not step_len and not rowsbool:
-        step_len = 40
-        search_radius=40
-    if not step_len and rowsbool:
-        step_len=200
-        search_radius=200
-    if not budget and not rowsbool:
-        budget = 350
-    if not budget and rowsbool:
-        budget = 500
-    # 7,1 = informed, 12 days
-    # 7,2 = uninformed 12 days
-    # 8,1 = informed 12 days, starting with blank worldmodel
-    # 8,2 = uninformed 12 days, starting with blank worldmodel
-    # 9 (1,2,3,4) = same as 1 (1,2,3,4) = budget testing but then with uniform uncertainty matrix
-    # returning all the settings
-    return [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, multirobot]
-def getDisease(name):
-    if name == "pathogen1":
-        disease = Pathogen(patchnr=3, infectionduration=4, spreadrange=5, reproductionfraction=0.5, reproductionrate=2,
-                            standarddeviation=0.3, saturation=5)
-    elif name=="pathogen2":
-        # two patches
-        disease = Pathogen(patchnr=2, infectionduration=4, spreadrange=3, reproductionfraction=0.5,
-                            reproductionrate=2, standarddeviation=0.3, saturation=5)
+    match scenario[3]: # robot nr
+        case 1:
+            multirobot = 1
+        case 2:
+            multirobot = 2
+        case 3:
+            multirobot = 5
+    return [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, multirobot],[gaussians_nr,gaussians_size]
 
-    elif name == "weed1":
-        disease = Weed(patchnr=4, patchsize=7, spreadrange=3, reproductionrate=2, standarddeviation=1,
-                    saturation=2, plantattach=False)
-    else:
-        disease = Weed(patchnr=2, patchsize=4, spreadrange=5, reproductionrate=4, standarddeviation=1,
-                    saturation=1, plantattach=False)
-    return disease
 def prepandtest():
-    #time_start = time.time()
-    scenariosettings=None
-    #time_start = time.process_time()
+    scenariolist = [[1, 1, 1], [1, 1, 2], [1, 1, 3], 
+                    [1, 2, 1], [1, 2, 2], [1, 2, 3], 
+                    [1, 3, 1], [1, 3, 2], [1, 3, 3],
+                    [2, 1, 1], [2, 1, 2], [2, 1, 3], 
+                    [2, 2, 1], [2, 2, 2], [2, 2, 3], 
+                    [2, 3, 1], [2, 3, 2], [2, 3, 3],
+                    [3, 1, 1], [3, 1, 2], [3, 1, 3], 
+                    [3, 2, 1], [3, 2, 2], [3, 2, 3], 
+                    [3, 3, 1], [3, 3, 2], [3, 3, 3]]
 
-    # Choose the field shape:
-    #[field_matrix,field_vertex] = polygon("hexagon_small",True)
-    #[field_matrix,field_vertex] = polygon("hexagon_convex",True)
-    #[field_matrix,field_vertex] = polygon("hexagon_concave",True)
-    #[field_matrix,field_vertex] = polygon("rectangle_obstacle",True)
+    for scenario in scenariolist:
+        settings,[gaussians_nr,gaussians_size] = getSettings(scenario)
+        if gaussians_size==1:
+            uncertainty_matrix = create_random_infomap(type="point",source_nr=gaussians_nr)
+        else:
+            uncertainty_matrix = create_random_infomap(source_nr=gaussians_nr, source_size=gaussians_size)
 
-    scenariovariants = [["convex", False, "pathogen1"], ["convex", False, "pathogen2"], ["convex", True, "weed1"],
-                        ["convex", True, "weed2"],
-                        ["nonconvex", False, "pathogen1"], ["nonconvex", False, "pathogen2"],
-                        ["nonconvex", True, "weed1"], ["nonconvex", True, "weed2"],
-                        ["obstacle", False, "pathogen1"], ["obstacle", False, "pathogen2"], ["obstacle", True, "weed1"],
-                        ["obstacle", True, "weed2"], ["rectangle", False, "pathogen1"]]
-    # variant = [field, weedbool, weed/pathogen type]
-    preparing = False
-    if preparing:
-        # variant = [field, weedbool, weed/pathogen type]
-        for rowsbool in [False,True]:
-           #for variant in scenariovariants:
-           variant = ["rectangle", False, "pathogen2"]
-           if variant == ["rectangle", False, "pathogen2"]:
-           # variant = scenariovariants[-1]
-           # if variant == scenariovariants[-1]: #quick workaround
-               # Choose the field shape:
-               # Receive: field_matrix, field_vertex
-               if variant[0]=="convex":
-                   [field_matrix, field_vertex] = polygon("hexagon_convex", False)
-               elif variant[0]=="concave":
-                   [field_matrix,field_vertex] = polygon("hexagon_concave",False)
-               elif variant[0]=="obstacle":
-                   [field_matrix,field_vertex] = polygon("rectangle_obstacle",False)
-               elif variant[0]=="rectangle":
-                   [field_matrix,field_vertex] = polygon("rectangle",False)
+        # Our method
+        pathname = str("../Result_files/") + str(scenario) + str("_method/")
+        [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
+                            matrices,samplelocations] = rig_matrix(uncertainty_matrix,settings)
+        animation_max_coverage(uncertainty_matrix,finalpath,finalinfo,"Proposed Method",False,pathname)
 
-               # Define the plant locations
-               # Receive plant_matrix, row_nrs, row_edges
-               if rowsbool:
-                   [plant_matrix, row_nrs, row_edges, field_vertex] = withrows(field_matrix, 2, 1, field_vertex, False)
+        # Uninformed method
+        pathname = str("../Result_files/") + str(scenario) + str("_uninformed/")
+        uniform_matrix = deepcopy(uncertainty_matrix)
+        uniform_matrix[uniform_matrix >= 0.0] = 0.001
+        [finalpath, infopath, finalcost, uninf_finalinfo, budget, steplength, searchradius, iteration,
+                            matrices,samplelocations] = rig_matrix(uniform_matrix,settings)
+        nodelist = []
+        finalinfo = 0
+        for gridpoint in infopath:
+            if gridpoint not in nodelist:
+                finalinfo += uncertainty_matrix[gridpoint[1],gridpoint[0]]
+        animation_max_coverage(uncertainty_matrix,finalpath,finalinfo,"Uninformed Method",False,pathname)
 
-               else:
-                   plant_matrix = norows(field_matrix, 2, False)
-
-               # Compute the spread and uncertainty
-               # Receive: spread_matrix, worldmodel_matrix, uncertainty_matrix
-               rates=[]
-               weedbool = variant[1]
-               if not weedbool:
-                   # Configure the spreading characteristics of the pathogen
-                   # more aggressive
-                   if variant[2] == "pathogen1":
-                       pathogen = Pathogen(patchnr=3, infectionduration=4, spreadrange=5, reproductionfraction=0.5,reproductionrate=2, standarddeviation=0.3, saturation=5)
-                   else:
-                       # two patches
-                       pathogen = Pathogen(patchnr=2, infectionduration=2, spreadrange=3, reproductionfraction=0.3,
-                                        reproductionrate=2, standarddeviation=0.3, saturation=5)
-
-                   spread_matrix, worldmodel_matrix, uncertainty_matrix = pathogenspread(field_matrix, plant_matrix,
-                                                                                         pathogen, True)
-                   for i in range(1, 13):
-                       reproductionrate = np.random.normal(pathogen.reproductionrate, pathogen.reproductionrateSTD)
-                       rates.append(reproductionrate)
-               else:
-                   if variant[2] == "weed1":
-                       weed = Weed(patchnr=4, patchsize=7, spreadrange=3, reproductionrate=2, standarddeviation=1,
-                                saturation=2, plantattach=False)
-                   else:
-                       weed = Weed(patchnr=2, patchsize=4, spreadrange=5, reproductionrate=4, standarddeviation=1,
-                                    saturation=1, plantattach=False)
-
-                   spread_matrix, worldmodel_matrix, uncertainty_matrix = weedsspread(field_matrix, plant_matrix, weed,
-                                                                                      False)
-
-                   for i in range(1,13):
-                       reproductionrate= np.random.normal(weed.reproductionrate, weed.reproductionrateSTD)
-                       rates.append(reproductionrate)
-               print(np.nansum(uncertainty_matrix))
-               # Execute planning
-               # Receive: samplelocations
-               #if scenariovariants.index(variant)%4==0:
-               if True:
-
-                   matrices = None  # initialize for first day
-                   scenariosettings = None
-                   total_days=1
-                   for day in range(1, total_days + 1):
-                       if rowsbool:
-                           [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
-                            matrices,samplelocations] = rig_rows_matrix(
-                               uncertainty_matrix, row_nrs, row_edges, field_vertex, scenariosettings, matrices)
-                       else:
-                           [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
-                            matrices,samplelocations] = rig_matrix(uncertainty_matrix, scenariosettings, matrices)
-
-               # Save everything to the correct scenario location:
-               # for variant2 in scenariovariants:
-               #     if variant[0]==variant2[0]:
-               if rowsbool:
-                   #pathname = str("Testing_files/rows/") + str(variant[0]) + str(variant[2])
-                   pathname = str("../Testing_files/rows/") + str(variant[0]) + str(variant[2])
-                   if not os.path.exists(pathname):
-                       os.makedirs(pathname)
-                   # with open(pathname+'/row_nrs.pickle', 'wb') as handle:
-                   #     pickle.dump(row_nrs,handle,protocol=pickle.HIGHEST_PROTOCOL)
-                   # with open(pathname+'/row_edges.pickle', 'wb') as handle:
-                   #     pickle.dump(row_edges,handle,protocol=pickle.HIGHEST_PROTOCOL)
-                   # with open(pathname+'/field_vertex.pickle', 'wb') as handle:
-                   #     pickle.dump(field_vertex,handle,protocol=pickle.HIGHEST_PROTOCOL)
-                   np.save(pathname + '/row_nrs.npy', row_nrs)
-                   np.save(pathname + '/row_edges.npy', row_edges)
-                   np.save(pathname + '/field_vertex.npy', np.array(field_vertex,dtype=object))
-               else:
-                   #pathname = str("Testing_files/norows/") + str(variant[0]) + str(variant[2])
-                   pathname = str("../Testing_files/norows/") + str(variant[0]) + str(variant[2])
-                   if not os.path.exists(pathname):
-                       os.makedirs(pathname)
-
-               np.save(pathname + '/matrices0.npy', matrices[0])
-               np.save(pathname + '/matrices1.npy', matrices[1])
-               # np.save(pathname + '/matrices2.npy', matrices[2])
-               # np.save(pathname + '/matrices3.npy', matrices[3])
-               np.save(pathname + '/plant_matrix.npy',plant_matrix)
-               np.save(pathname + '/spread_matrix.npy',spread_matrix)
-               np.save(pathname + '/worldmodel_matrix.npy',worldmodel_matrix)
-               np.save(pathname + '/uncertainty_matrix.npy',uncertainty_matrix)
-               show_map(spread_matrix, False, True, pathname,"/spread_matrix")
-               del spread_matrix
-               show_map(worldmodel_matrix, False, True, pathname,"/worldmodel_matrix")
-               del worldmodel_matrix
-               show_map(uncertainty_matrix, False, True, pathname,"/uncertainty_matrix")
-               del uncertainty_matrix
-
-               np.save(pathname + '/samplelocations.npy',samplelocations)
-               np.save(pathname + '/reproductionrates.npy', rates)
-
-
-               print("Finished saving for this scenario/ field")
-
-
-    testing=True
-    if testing:
-        scenariolist = [[1, 1], [1, 2], [1, 3], [1, 4], [1, 5], [1, 6], [1, 7], [1, 8],
-                        [2, 1], [2, 2], [2, 3], [2, 4],
-                        [3, 1], [3, 2], [3, 3], [3, 4],
-                        [4, 1], [4, 2], [4, 3], [4, 4], [4, 5], [4, 6], [4, 7], [4, 8],
-                        [5, 1], [5, 2], [5, 3], [5, 4],
-                        [6, 1], [6, 2], [6, 3], [6, 4]]
-        #for scenario in scenariolist[30:]:
-        for scenario in [[8, 1],[8,2]]:
-        #for scenario in [[9,1],[9,2],[9,3],[9,4]]:
-            scenariosettings = getSettings(scenario)
-            # scenariosettings = [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, multirobot]
-
-            # variant = [field, weedbool, weed/pathogen type]
-            rowsbool = scenariosettings[0]
-            #for variant in scenariovariants:
-            variant = ["rectangle", False, "pathogen2"]
-            if variant == ["rectangle", False, "pathogen2"]:
-            #variant = scenariovariants[-1]
-            #if variant == scenariovariants[-1]:  # quick workaround
-
-                if rowsbool:
-                    pathname = str("../Testing_files/rows/")+str(variant[0])+str(variant[2])
-                    row_nrs_np = np.load(pathname + '/row_nrs.npy')
-                    row_nrs=[]
-                    for row_nr in row_nrs_np:
-                        row_nrs.append(row_nr)
-                    row_edges = np.load(pathname + '/row_edges.npy')
-                    field_vertex = np.load(pathname + '/field_vertex.npy', allow_pickle=True)
-                else:
-                    pathname = str("../Testing_files/norows/") + str(variant[0]) + str(variant[2])
-                plant_matrix= np.load(pathname+'/plant_matrix.npy')
-                spread_matrix= np.load(pathname+'/spread_matrix.npy')
-                worldmodel_matrix= np.load(pathname+'/worldmodel_matrix.npy')
-                uncertainty_matrix =  np.load(pathname+'/uncertainty_matrix.npy')
-                if scenario[0] ==8: # start with blank worldmodel (no previous knowledge)
-                    print("Start with blank worldmodel")
-                    plant_matrix = np.load(str("../Testing_files/norows/") + str(variant[0]) + str(
-                        variant[2]) + '/plant_matrix.npy', allow_pickle=True)
-                    worldmodel_matrix = deepcopy(plant_matrix)
-                    worldmodel_matrix[worldmodel_matrix >= 0.0] = 0
-                if scenario==[2,2] or scenario==[2,4] or scenario[0]==8 or scenario[0]==9: # uniform uncertainty matrix
-                    plant_matrix = np.load(str("../Testing_files/rows/")+str(variant[0])+str('pathogen1') + '/plant_matrix.npy', allow_pickle=True)
-                    uncertainty_matrix = deepcopy(plant_matrix)
-                    uncertainty_matrix[uncertainty_matrix >= 0.0] = 0.001
-
-                matrices0 = np.load(pathname+'/matrices0.npy')
-                matrices1 = np.load(pathname+'/matrices1.npy')
-                matrices = [matrices0,matrices1]
-
-                if scenario==[1,1] or scenario==[1,5]:
-                    samplelocations=[]
-                    pathname_test=pathname
-                else:
-                    samplelocations = np.load(pathname+ '/samplelocations.npy')
-                    print("samplelocations are loaded")
-                    print(samplelocations)
-
-                reproductionrates = np.load(pathname+ '/reproductionrates.npy')
-
-                # defining the path to the result folder
-                if rowsbool:
-                    pathname = str("../Result_files/rows/") + str(scenario) + str("/") + str(variant[0]) + str(
-                        variant[2]+"/")
-                else:
-                    pathname = str("../Result_files/norows/") + str(scenario) + str("/") + str(
-                        variant[0]) + str(variant[2]+"/")
-                if not os.path.exists(pathname):
-                    os.makedirs(pathname)
-                scenariosettings.append(pathname) # such that files can also be saved within the algorithm
-
-                time_start = time.process_time()
-                if scenario[0]==6 or scenario[0]==7 or scenario[0]==8:
-                    #for dailyuncertainty in [0,0.001,0.01]:
-                    dailyuncertainty=0
-                    if dailyuncertainty==0:
-                        print("Long simulations")
-                        time_start = time.process_time()
-                        total_days = 12
-                        for day in range(1, total_days + 1):
-                            if scenario == [7, 1] or scenario == [8, 1]:
-                                samplelocations = []
-                            elif scenario == [7, 2] or scenario == [8, 2]:
-                                pathname_x = str("../Result_files/norows/") + str([scenario[0], 1]) + str("/") + str(
-                                variant[0]) + str(variant[2] + "/")
-                                samplelocations = np.load(pathname_x + str(day) + '_samplelocations.npy')
-                            if scenario==[7,2] or scenario==[8,2]:
-                                plant_matrix = np.load(str("../Testing_files/norows/") + str(variant[0]) + str(
-                                    variant[2]) + '/plant_matrix.npy', allow_pickle=True)
-                                uncertainty_matrix = deepcopy(plant_matrix)
-                                uncertainty_matrix[uncertainty_matrix >= 0.0] = 0.001
-                                if scenario==[8,2] and day>1:
-                                    for cell in infopath:
-                                        uncertainty_matrix[cell[1], cell[0]]=0
-                            scenariosettings[-1]=pathname+str(day)
-                            reproductionrate=reproductionrates[day-1]
-                            if rowsbool:
-                                [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
-                                 matrices_new, samplelocations_new] = rig_rows_matrix(
-                                    uncertainty_matrix, row_nrs, row_edges, field_vertex, scenariosettings, matrices,samplelocations)
-                            else:
-                                [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
-                                 matrices_new, samplelocations_new] = rig_matrix(uncertainty_matrix, scenariosettings, matrices,samplelocations)
-
-
-                            time_end = time.process_time()
-                            totaltime = time_end - time_start
-                            # Saving the results per day
-                            np.save(pathname + str(day)+'_samplelocations.npy', samplelocations_new)
-
-                            np.save(pathname + str(day)+'_finalpath.npy', finalpath)
-                            np.save(pathname + str(day)+'_infopath.npy', infopath)
-                            np.save(pathname + str(day)+'_finalcost.npy', finalcost)
-                            np.save(pathname + str(day)+'_finalinfo.npy', finalinfo)
-                            np.save(pathname + str(day)+'_iteration.npy', iteration)
-                            np.save(pathname + str(day)+'_runtime.npy', totaltime)
-
-                            np.save(pathname + str(day)+'_spread_matrix.npy', spread_matrix)
-                            np.save(pathname + str(day)+'_worldmodel_matrix.npy', worldmodel_matrix)
-                            np.save(pathname + str(day)+'_uncertainty_matrix.npy', uncertainty_matrix)
-                            show_map(spread_matrix, False, True, pathname, str(day)+'_spread_matrix')
-                            show_map(worldmodel_matrix, False, True, pathname, str(day)+'_worldmodel_matrix')
-                            show_map(uncertainty_matrix, False, True, pathname, str(day)+'_uncertainty_matrix')
-
-                            disease = getDisease(variant[2])
-                            [spread_matrix, worldmodel_matrix, uncertainty_matrix] = updatematrix(
-                                disease, plant_matrix, spread_matrix, worldmodel_matrix, uncertainty_matrix, infopath,
-                                0,dailyuncertainty, reproductionrate,False)
-
-                            mpl.pyplot.close('all')
-
-                else:
-                    print("Single simulations")
-                    # Running the simulation
-                    if rowsbool:
-                        [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
-                         matrices, samplelocations] = rig_rows_matrix(
-                            uncertainty_matrix, row_nrs, row_edges, field_vertex, scenariosettings, matrices,samplelocations)
-                    else:
-                        [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
-                         matrices, samplelocations] = rig_matrix(uncertainty_matrix, scenariosettings, matrices,samplelocations)
-                    time_end = time.process_time()
-                    totaltime = time_end-time_start
-
-                    if scenario == [1, 1] or scenario == [1, 5]:
-                        print("Samplelocations are saved")
-                        print(samplelocations)
-                        np.save(pathname_test + '/samplelocations.npy', samplelocations)
-                    # Saving the results
-                    np.save(pathname + 'finalpath.npy', finalpath)
-                    np.save(pathname + 'infopath.npy', infopath)
-                    np.save(pathname + 'finalcost.npy', finalcost)
-                    np.save(pathname + 'finalinfo.npy', finalinfo)
-                    np.save(pathname + 'iteration.npy', iteration)
-                    np.save(pathname + 'runtime.npy', totaltime)
-
-
+        # Budgeted coverage
+        pathname = str("../Result_files/") + str(scenario) + str("_coverage/")
+        startpos=[50,0]
+        [finalpath, finalinfo, finalcost] = max_coverage(uncertainty_matrix, settings[1], startpos, settings[7],False)
+        animation_max_coverage(uncertainty_matrix,finalpath,finalinfo,"Coverage Method",False,pathname)
 
 def default():
     time_start = time.process_time()
@@ -750,8 +277,6 @@ def minimum_example():
 
 def multi_robot(): # NOT FUNCTIONAL YET AT ALL
     total_robots=2
-    matrices=None #initialize for first day
-    scenariosettings=None
     uncertainty_matrix = create_random_infomap(type="point",source_nr=30)
     default_scenario = getDefaultSettings(stopsetting="mild",step_len=30,budget=400, multirobot=total_robots)
     #pathname = [] # empty pathname
@@ -766,8 +291,11 @@ def multi_robot(): # NOT FUNCTIONAL YET AT ALL
 
 
 def coverage():
-    uncertainty_matrix = create_random_infomap(type="point",source_nr=30)
-    max_coverage(uncertainty_matrix,150)
+    startpos=[50,0]
+    uncertainty_matrix = create_random_infomap()
+    #uncertainty_matrix = create_random_infomap(type="point",source_nr=30)
+    max_coverage(uncertainty_matrix, 300, startpos,3)
+
 
 if __name__ == '__main__':
     #default()

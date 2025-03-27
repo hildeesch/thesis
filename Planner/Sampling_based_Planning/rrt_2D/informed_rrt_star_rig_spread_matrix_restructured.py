@@ -639,7 +639,7 @@ class IRrtStar:
 
         if infopath == None:
 
-            dt = 1 / (4 * distance)
+            dt = 1 / (2 * distance)
             t = 0
             info = 0
             infopath = []
