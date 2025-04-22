@@ -64,7 +64,7 @@ class IRrtStar:
         self.obs_boundary = self.env.obs_boundary
 
         self.V = [self.x_start]
-        self.X_soln = []
+        self.X_soln = [self.x_start]
         self.path = None
 
         self.inforadius = 0 # monitor radius around the robot (0 = no radius, so only at the location of the robot)
@@ -84,6 +84,8 @@ class IRrtStar:
             self.pathname=[]
         #self.scenario=scenario
         self.samplelocations=samplelocations
+        #self.samplelocations_add=False
+
         if len(samplelocations)>0:
             self.samplelocations_add=False
         else:
@@ -91,6 +93,7 @@ class IRrtStar:
             self.samplelocations=[]
 
         self.uncertaintymatrix = uncertaintymatrix
+        self.max_info = np.nansum(uncertaintymatrix)
 
         self.x_best = self.x_start # just for now, remove later
         self.i_best = 0
@@ -114,7 +117,8 @@ class IRrtStar:
     def init(self):
         self.x_best = self.x_start
         self.show = False
-        self.visualizationmode ="steps" #steps, nosteps or False
+        self.print = False
+        self.visualizationmode ="False" #steps, nosteps or False
         self.rewiringafter = True #TODO: why is this there? doesn't seem intuitive
         return 
 
@@ -132,7 +136,7 @@ class IRrtStar:
         double=False # for viz purposes it is defined here
         while k<self.iter_max:
             k+=1
-            if k==25:
+            if k==25 and self.visualizationmode=="steps":
                 self.visualizationmode="nosteps" # change it after x iterations for less visualizations
             if k>=3-3: #only evaluate from when we might want it to stop
                 cost = {node: node.totalcost for node in self.X_soln}
@@ -144,8 +148,9 @@ class IRrtStar:
                     #c_best = cost[x_best]
                     i_last_best = i_best
                     self.i_best = info[x_best]
+                    if self.i_best == self.max_info: # stop if we reached all the info in the map
+                        break
 
-                    i_best = info[x_best]
 
 
                     #print("i_best: "+str(i_best)+" i_last_best: "+str(i_last_best)+" Criterion value: "+str(((i_best-i_last_best)*100/i_last_best)))
@@ -161,7 +166,8 @@ class IRrtStar:
             if k%50==0 and not double:
                 print("ATTENTION!!! ATTENTION!!! ATTENTION!!! AGAIN FIFTY CYCLES FURTHER, CURRENT CYCLE ="+str(k)) # to know how far we are
             endlen=len(self.V)
-            print("Nr of nodes added: "+str(endlen-startlen))
+            if self.print:
+                print("Nr of nodes added: "+str(endlen-startlen))
             # if (endlen-startlen)==0 and not double:
             #     k-=1
             #     print("Len X_Near was: "+str(len(self.Near(self.V,x_new))))
@@ -180,12 +186,12 @@ class IRrtStar:
 
 
             timestart=time.time()
+            #x_rand = self.SampleFreeSpace()
             if self.samplelocations_add:
                 x_rand = self.SampleFreeSpace()
                 self.samplelocations.append([x_rand.x, x_rand.y])
             else:
                 x_rand = Node((self.samplelocations[k-1]))
-                #x_rand=self.samplelocations[k]
                 if double: # otherwise we keep trying the same location again and again
                     x_rand = self.SampleFreeSpace()
             if self.visualizationmode=="steps" and not double:  # visualize all new connections with near ndoes
@@ -215,7 +221,7 @@ class IRrtStar:
             for node in self.V:
                 if node.x == x_new.x and node.y == x_new.y:  # co-located nodes
                     double=True #there is already a node at this location, so we skip it
-                    print("double")
+                    # print("double")
                     k-=1
                     if self.samplelocations_add:
                         self.samplelocations.pop()
@@ -229,34 +235,36 @@ class IRrtStar:
                 # if day == 1:
                 #     print(len(self.Near(self.V, x_new)))
 
-                for x_near in self.Near(self.V,x_new):
+                for x_near in self.Near(self.X_soln,x_new):
                     node_new = Node((x_new.x, x_new.y))
                     node_new.parent = x_near  # added
                     dist = self.get_distance_and_angle(x_near,node_new)[0]
                     c_min = x_near.cost + dist
-                    endcost = self.get_distance_and_angle(node_new,self.x_goal)[0] #TODO: doesn't seem used
+                    #endcost = self.get_distance_and_angle(node_new,self.x_goal)[0] #TODO: doesn't seem used
                     
                     node_new.cost = c_min 
                     node_new.info = self.Info_cont(node_new)
                     self.V.append(node_new) #generate a "node"/trajectory to each near point
-                    #tworoundstrategy2
-                    if self.multirobot: #TODO adapt for more than 2 rounds
-                        if node_new.parent.round==2: #or ([node_new.x,node_new.y]==[self.x_goal.x,self.x_goal.y] and node_new.cost!=0):
-                            node_new.round=2
-                            node_new.prevroundcost=node_new.parent.prevroundcost
+                    # multirobot strategy
+                    if node_new.parent.round>1:
+                        node_new.round = node_new.parent.round
+                        node_new.prevroundcost=node_new.parent.prevroundcost
 
                     timestart = time.time()
                     self.LastPath(node_new)
                     timeend = time.time()
                     self.time[5] += (timeend - timestart)
-                    if node_new.totalcost <= self.budget:  # extra check for budget for actual parent
+                    # Simplified condition for both single and multirobot:
+                    if (node_new.totalcost-node_new.prevroundcost) <= (self.budget):
                         self.X_soln.append(node_new)
-                    # tworoundstrategy2:
-                    if self.multirobot:
-                        if node_new.round == 2 and (node_new.totalcost-node_new.prevroundcost) <= (self.budget):
-                            # if a node_new is in round 2, it is allowed to have a double budget
-                            # to make sure we don't surpass the original budget in round 1, we add that every parent also has to be a solution
-                            self.X_soln.append(node_new)
+                    # if node_new.totalcost <= self.budget:  # extra check for budget for actual parent
+                    #     self.X_soln.append(node_new)
+                    # # tworoundstrategy2:
+                    # if self.multirobot:
+                    #     if node_new.round > 1 and (node_new.totalcost-node_new.prevroundcost) <= (self.budget):
+                    #         # if a node_new is in round 2, it is allowed to have a double budget
+                    #         # to make sure we don't surpass the original budget in round 1, we add that every parent also has to be a solution
+                    #         self.X_soln.append(node_new)
                 # Visualization before pruning
                 if self.visualizationmode=="steps" and not double: # visualize all new connections with near ndoes
                     self.fig, self.ax = plt.subplots()
@@ -277,8 +285,9 @@ class IRrtStar:
                    self.Pruning(node_new) 
                 #tworoundstrategy2: first prune, then create a start of a new round for each node of the first round
                 if self.multirobot:
-                    self.RoundTwoAdd(node_new)
-                
+                    #self.RoundTwoAdd(node_new)
+                    self.MultiRobotAdd(x_new)
+
                 self.Rewiring_new(x_new)
                 #print("node_new: ("+str(node_new.x)+","+str(node_new.y)+")")
 
@@ -312,8 +321,12 @@ class IRrtStar:
         # Rewiring in Hindsight:
         top10info = [] #to see effect of rewiring
         if self.rewiringafter or not self.multirobot and self.boolrewiring: #TODO: these ifs don't make sense to me
-            info = {node: node.totalinfo for node in self.X_soln}
+            #info = {node: node.totalinfo for node in self.X_soln}
+            info = {node: node.totalinfo for node in self.X_soln if node.round == self.multirobot}
+            if len(info)==0:
+                info = {node: node.totalinfo for node in self.X_soln}
             topinfo = sorted(info, key=info.get)[-(1)].totalinfo
+
             for i in range(min(200,len(info))):  # rewire the x best nodes
                 # self.x_best = max(info, key=info.get)
                 curnode = sorted(info, key=info.get)[-(i + 1)]
@@ -324,8 +337,9 @@ class IRrtStar:
                 curnode = self.rewiring_afterv2(curnode, self.multirobot)
                 top10info.append([round(previnfo),round(curnode.totalinfo),round(((curnode.totalinfo-previnfo)/previnfo),2)])
                 # ,round(curnode.totalinfo-previnfo),round(((curnode.totalinfo-previnfo)/previnfo),2)
-            print("Rewiring, info changes:")
-            print(top10info)
+            if self.print:
+                print("Rewiring, info changes:")
+                print(top10info)
             info = {node: node.totalinfo for node in self.X_soln}
             self.x_best = max(info, key=info.get)
             x_best = max(info, key=info.get)
@@ -333,7 +347,8 @@ class IRrtStar:
         if self.multirobot and not self.rewiringafter and self.boolrewiring:
             multirobot=False # to make sure it rewires in the correct way
             top20nodes=[] #top 10 nodes split in two rounds each
-            info = {node: node.totalinfo for node in self.X_soln}
+            #info = {node: node.totalinfo for node in self.X_soln}
+            info = {node: node.totalinfo for node in self.X_soln if node.round == self.multirobot}
             topinfo = sorted(info, key=info.get)[-(1)].totalinfo
             for i in range(min(200,len(info))):  # rewire the 10 best nodes
                 # self.x_best = max(info, key=info.get)
@@ -359,64 +374,38 @@ class IRrtStar:
         # Extracting the path
         #self.path = self.ExtractPath(x_best)
         #[self.path,nodes] = self.ExtractPath(x_best)
+        ## ADDED (TODO: sort out this part)
+        # multi_info = {node: node.totalinfo for node in self.X_soln if (node.round == self.multirobot and node.totalcost>node.prevroundcost)}
+        # x_check = max(multi_info, key=multi_info.get)
+        # print("Multiround: Best node after rewiring: tot. info: " + str(x_check.totalinfo) + " Cost: " + str(x_check.totalcost)+" Prevcost: "+str(x_check.prevroundcost)+ " Pos: "+ str(x_check.x)+str(x_check.y)+" Parent round: "+str(x_check.parent.round))
+        # #
+        # Changed: for final node selection, select the path with highest info and lowest cost (in case there are multiple with same info)
+        # Find the maximum totalinfo value
+        max_info = max(node.totalinfo for node in self.X_soln)
+        
+        # Select nodes with the maximum totalinfo
+        best_candidates = [node for node in self.X_soln if node.totalinfo == max_info]
+        
+        # Among these, select the node with the lowest totalcost
+        x_best = min(best_candidates, key=lambda node: node.totalcost)
 
-        [self.path,infopath] = self.ExtractPath(x_best)
+        # Old approach (not considering lowest cost:)
+        # info = {node: node.totalinfo for node in self.X_soln}
+        # x_best = max(info, key=info.get)
+
+        # as it was:
+        [[self.path,path_rounds],infopath] = self.ExtractPath(x_best)
 
         node = x_best
         ## BEGIN OF VIZ
         # self.animation()
-        self.animation_new()
-        plt.plot(x_best.x, x_best.y, "bs", linewidth=3)
-        plt.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
-        # making the second part of two-day paths another colour
-        secondround = False
-        for index, cell in enumerate(self.path):
-            if secondround:
-                plt.plot([self.path[index - 1][0], self.path[index][0]],
-                            [self.path[index - 1][1], self.path[index][1]], "-m")
-            if [cell[0], cell[1]] == [self.x_start.x, self.x_start.y] and index > 0 and [self.path[index - 1][0],
-                                                                                            self.path[index - 1][
-                                                                                                1]] != [self.x_start.x,
-                                                                                                        self.x_start.y] and secondround == False:
-                secondround = True
-                # print("Second round starts at index "+str(index))
-
-        #doubleroundstrategy:
-        # if path_firstround!=self.path:
-        #     print("First round is not equal to the final path")
-        #     plt.plot([x for x, _ in path_firstround], [y for _, y in path_firstround], '-c')
-        # else:
-        #     print("First round is equal to the final path")
-        #     print(len(self.X_soln),len(self.X_soln_prev))
-
-
-
-
-        #plt.plot([x for x, _ in x_best.infopath], [y for _, y in x_best.infopath], '-b')
-        #plt.plot([x for x, _ in x_best.lastinfopath], [y for _, y in x_best.lastinfopath], '-c')
-        #plt.plot([x for x, _ in self.path[:2]],[y for _, y in self.path[:2]], '-k') # to see whether the path actually ends at the goal
-        plt.pause(0.01)
-        if self.show:
-            plt.show()
-        if self.pathname:
-            plt.savefig(self.pathname + "final_bestpath")
-
-        fig, ax = plt.subplots()
-        colormap = cm.Blues
-        colormap.set_bad(color='black')
-        im= ax.imshow(self.uncertaintymatrix, colormap, vmin=0, vmax=3, origin='lower')
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax)
-        # for node in nodes:
-        #     ax.plot(node[0], node[1], marker=(8, 2, 0),color="blue", linewidth=3, markersize=20)
-        for cell in infopath:
-            ax.plot(cell[0],cell[1],marker="o",markersize=1,color="blue")
-        #ax.plot(x_best.x, x_best.y, marker=(8, 2, 0), color="green", linewidth=3, markersize=20)
-        ax.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
-        # making the second part of two-day paths another colour
-        secondround = False
-        if self.multirobot:
+        if self.print:
+            self.fig, self.ax = plt.subplots()
+            self.animation_new()
+            plt.plot(x_best.x, x_best.y, "bs", linewidth=3)
+            plt.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
+            # making the second part of two-day paths another colour
+            secondround = False
             for index, cell in enumerate(self.path):
                 if secondround:
                     plt.plot([self.path[index - 1][0], self.path[index][0]],
@@ -424,21 +413,68 @@ class IRrtStar:
                 if [cell[0], cell[1]] == [self.x_start.x, self.x_start.y] and index > 0 and [self.path[index - 1][0],
                                                                                                 self.path[index - 1][
                                                                                                     1]] != [self.x_start.x,
-                                                                                                            self.x_start.y]:
+                                                                                                            self.x_start.y] and secondround == False:
                     secondround = True
+                    # print("Second round starts at index "+str(index))
 
-        #doubleroundstrategy:
-        # if path_firstround!=self.path:
-        #     ax.plot([x for x, _ in path_firstround], [y for _, y in path_firstround], '-c')
+            #doubleroundstrategy:
+            # if path_firstround!=self.path:
+            #     print("First round is not equal to the final path")
+            #     plt.plot([x for x, _ in path_firstround], [y for _, y in path_firstround], '-c')
+            # else:
+            #     print("First round is equal to the final path")
+            #     print(len(self.X_soln),len(self.X_soln_prev))
 
 
-        ax.set_title("Spatial distribution of uncertainty and final path")
-        #fig.tight_layout()
-        if self.show:
-            plt.show()
-        if self.pathname:
-            plt.savefig(self.pathname + "final_distribution")
-        # Note: now that we removed stopcriterion, we don't have the k_list anymore
+
+
+            #plt.plot([x for x, _ in x_best.infopath], [y for _, y in x_best.infopath], '-b')
+            #plt.plot([x for x, _ in x_best.lastinfopath], [y for _, y in x_best.lastinfopath], '-c')
+            #plt.plot([x for x, _ in self.path[:2]],[y for _, y in self.path[:2]], '-k') # to see whether the path actually ends at the goal
+            plt.pause(0.01)
+            if self.show:
+                plt.show()
+            if self.pathname:
+                plt.savefig(self.pathname + "final_bestpath")
+
+            fig, ax = plt.subplots()
+            colormap = cm.Blues
+            colormap.set_bad(color='black')
+            im= ax.imshow(self.uncertaintymatrix, colormap, vmin=0, vmax=3, origin='lower')
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            plt.colorbar(im, cax=cax)
+            # for node in nodes:
+            #     ax.plot(node[0], node[1], marker=(8, 2, 0),color="blue", linewidth=3, markersize=20)
+            for cell in infopath:
+                ax.plot(cell[0],cell[1],marker="o",markersize=1,color="blue")
+            #ax.plot(x_best.x, x_best.y, marker=(8, 2, 0), color="green", linewidth=3, markersize=20)
+            ax.plot([x for x, _ in self.path], [y for _, y in self.path], '-r')
+            # making the second part of two-day paths another colour
+            secondround = False
+            if self.multirobot:
+                for index, cell in enumerate(self.path):
+                    if secondround:
+                        plt.plot([self.path[index - 1][0], self.path[index][0]],
+                                    [self.path[index - 1][1], self.path[index][1]], "-m")
+                    if [cell[0], cell[1]] == [self.x_start.x, self.x_start.y] and index > 0 and [self.path[index - 1][0],
+                                                                                                    self.path[index - 1][
+                                                                                                        1]] != [self.x_start.x,
+                                                                                                                self.x_start.y]:
+                        secondround = True
+
+            #doubleroundstrategy:
+            # if path_firstround!=self.path:
+            #     ax.plot([x for x, _ in path_firstround], [y for _, y in path_firstround], '-c')
+
+
+            ax.set_title("Spatial distribution of uncertainty and final path")
+            #fig.tight_layout()
+            if self.show:
+                plt.show()
+            if self.pathname:
+                plt.savefig(self.pathname + "final_distribution")
+            # Note: now that we removed stopcriterion, we don't have the k_list anymore
 
         # k_list_avg_der_neg=[]
         # i_list_avg_der_neg=[]
@@ -530,23 +566,23 @@ class IRrtStar:
         #x_best=nodefirstround
 
         #check the info score of the second part only:
-        if self.multirobot and self.rewiringafter:
+        # if self.multirobot and self.rewiringafter:
 
-            [nodefirstround,nodesecondround]=self.splitDoublePath(node)
+        #     [nodefirstround,nodesecondround]=self.splitDoublePath(node)
 
-            # node = nodesecondround
-            # while node.parent:
-            #     print(node.info)
-            #     node=node.parent
-            if nodefirstround.totalinfo>nodesecondround.totalinfo or nodesecondround==None: # round 1 is better or there is no actual second round
-                x_best=nodefirstround
-                [self.path, infopath] = self.ExtractPath(nodefirstround)
-                print("Executed path is round 1")
+        #     # node = nodesecondround
+        #     # while node.parent:
+        #     #     print(node.info)
+        #     #     node=node.parent
+        #     if nodefirstround.totalinfo>nodesecondround.totalinfo or nodesecondround==None: # round 1 is better or there is no actual second round
+        #         x_best=nodefirstround
+        #         [self.path, infopath] = self.ExtractPath(nodefirstround)
+        #         print("Executed path is round 1")
 
-            else:
-                x_best=nodesecondround
-                [self.path, infopath] = self.ExtractPath(nodesecondround)
-                print("Executed path is round 2")
+        #     else:
+        #         x_best=nodesecondround
+        #         [self.path, infopath] = self.ExtractPath(nodesecondround)
+        #         print("Executed path is round 2")
             # print("node first round: "+str(nodefirstround.x),str(nodefirstround.y)+" node second round: "+str(nodesecondround.x),str(nodesecondround.y))
             # print(len(infopathfirst))
             # print(len(infopathsecond))
@@ -565,7 +601,7 @@ class IRrtStar:
         #     np.save(self.pathname + 'i_list.npy', self.i_list)
         #     np.save(self.pathname + 'i_list_avg_der.npy', self.i_list_avg_der)
         #     np.save(self.pathname + 'i_list_avg_der2.npy', self.i_list_avg_der2)
-        return self.path, infopath, x_best.totalcost, x_best.totalinfo, self.budget, self.step_len, self.search_radius, k, matrices, self.samplelocations
+        return [self.path,path_rounds], infopath, x_best.totalcost, x_best.totalinfo, self.budget, self.step_len, self.search_radius, k, matrices, self.samplelocations
 
 
     def splitDoublePath(self,initial_node):
@@ -703,17 +739,17 @@ class IRrtStar:
                 dist = self.Line(parent, node)
                 node.info = parent.info + self.FindInfo(node.x, node.y, parent.x, parent.y, parent,
                                                             dist, True)
-                if (parent.cost+dist-parent.prevroundcost) > self.budget and (node in self.X_soln):
-                    print("ERROR ERROR ERROR: Recalculating - old cost: ",node.cost," New cost: ",(parent.cost+dist))
+                # if (parent.cost+dist-parent.prevroundcost) > self.budget and (node in self.X_soln):
+                #     print("ERROR ERROR ERROR: Recalculating - old cost: ",node.cost," New cost: ",(parent.cost+dist))
                 node.cost = parent.cost + dist
                 self.LastPath(node)
-                if node.round==2:
-                    if [node.x,node.y]==[self.x_start.x,self.x_start.y]: # start of round 2
+                if node.round>1:
+                    if [node.x,node.y]==[self.x_start.x,self.x_start.y]: # start of new round
                         node.prevroundcost=node.totalcost
                     else:
                         node.prevroundcost=node.parent.prevroundcost
 
-                if (node not in self.X_soln) and (node.totalcost<=self.budget):
+                if (node not in self.X_soln) and ((node.totalcost-node.prevroundcost)<=self.budget):
                     self.X_soln.append(node)
                 # else: # only nodes in x_soln can have children
                 #     self.Recalculate(node)  # recalculates the cost and info for nodes further down the path
@@ -744,7 +780,7 @@ class IRrtStar:
                     newnode.cost = x_near.parent.parent.cost + self.Line(x_near.parent.parent, x_new)
                     self.V.append(newnode)
                     self.LastPath(newnode)
-                    if (newnode.totalcost<=self.budget) or (newnode.round == 2 and (newnode.totalcost-newnode.prevroundcost) <= (self.budget)):
+                    if ((newnode.totalcost-newnode.prevroundcost) <= (self.budget)):
                         self.X_soln.append(newnode)
 
                     info = newnode.info + self.FindInfo(x_near.x, x_near.y, newnode.x, newnode.y, newnode,
@@ -754,12 +790,13 @@ class IRrtStar:
                     x_near.info = info
                     x_near.parent = newnode
                     self.LastPath(x_near)
-                    if x_near.round==2: # TODO: check if this logic is sound and if there are more cases like this
-                        if [x_near.x,x_near.y]==[self.x_start.x,self.x_start.y]: # start of round 2
+                    if x_near.round>1: # TODO: check if this logic is sound and if there are more cases like this
+                        if [x_near.x,x_near.y]==[self.x_start.x,self.x_start.y]: # start of new round
                             x_near.prevroundcost=x_near.totalcost
+                            newnode.prevroundcost = x_near.prevroundcost
                         else:
                             x_near.prevroundcost=x_near.parent.parent.prevroundcost
-                            newnode.round=2
+                            newnode.round=x_near.round
                             newnode.prevroundcost=x_near.parent.parent.prevroundcost
                     if (x_near not in self.X_soln) and (x_near.totalcost<=self.budget): #TODO: add second round thing (budget)
                         self.X_soln.append(x_near)
@@ -771,22 +808,27 @@ class IRrtStar:
 
     def rewiring_afterv2(self, best_node, doubleround): #rewiring afterwards
         # goal: gain more info while remaining within the budget
-        print("Start rewiring after v2")
-        print("Position: ["+str(best_node.x),str(best_node.y)+"] Info: " + str(best_node.info) + " Tot. info: " + str(
-            best_node.totalinfo) + " Cost: "+str(best_node.cost)+" Total cost: " + str(best_node.totalcost)+" First round cost:"+ str(best_node.prevroundcost))
+        if self.print:
+            print("Start rewiring after v2")
+            print("Position: ["+str(best_node.x),str(best_node.y)+"] Info: " + str(best_node.info) + " Tot. info: " + str(
+                best_node.totalinfo) + " Cost: "+str(best_node.cost)+" Total cost: " + str(best_node.totalcost)+" First round cost:"+ str(best_node.prevroundcost))
 
         bestpath=[]
         infosteps=[]
         node=best_node
 
-        # tworoundstrategy2:
-        costfirstround=best_node.prevroundcost
+        # multirobot:
+        #costfirstround=best_node.prevroundcost
+        prevroundcosts={}
+        prevroundcosts[best_node.round+1]=best_node.totalcost
         prev_copynode=None
 
         #TODO i don't understand what we do in this while loop (why add all the nodes again as solutions )
 
         while node!=self.x_start:
             #copynode = deepcopy(node) # just now
+            if node.round not in prevroundcosts:
+                prevroundcosts[node.round]=node.prevroundcost
             copynode = Node((node.x, node.y))
             if prev_copynode:
                 prev_copynode.parent=copynode
@@ -796,6 +838,7 @@ class IRrtStar:
             copynode.totalinfo = node.totalinfo
             copynode.totalcost = node.totalcost
             copynode.round = node.round
+            copynode.prevroundcost = node.prevroundcost
             if node==best_node:
                 copybest_node=copynode
             self.V.append(copynode)
@@ -818,11 +861,14 @@ class IRrtStar:
         prev_copynode.parent=self.x_start # for the last one
         best_node=copybest_node
 
+        roundcosts={}
+        for i in range(max(prevroundcosts)-1):
+            round=i+1
+            roundcosts[round] = prevroundcosts[round+1]-prevroundcosts[round]
 
-        # bestpath[-1].parent=self.x_start # just now
-        if costfirstround==0 or not doubleround:
-            #print("Rewiring: updated first round cost")
-            costfirstround=best_node.totalcost
+        # if prevroundcosts==0 or not doubleround:
+        #     #print("Rewiring: updated first round cost")
+        #     costfirstround=best_node.totalcost
 
 
         pastindexes = []
@@ -831,7 +877,6 @@ class IRrtStar:
         sortedinfo = sorted(infosteps)
 
         i=1
-        print("Len path: "+str(len(bestpath)))
         while notfinished:
             bestindex = infosteps.index(sortedinfo[-1])
             sortindex=1
@@ -839,7 +884,8 @@ class IRrtStar:
                 sortindex+=1
                 if sortindex >= len(bestpath):  # we have had every piece
                     notfinished = False
-                    print("Completed rewiring v2")
+                    if self.print:
+                        print("Completed rewiring v2")
                     break
                 bestindex = infosteps.index(sortedinfo[-sortindex])
 
@@ -854,9 +900,9 @@ class IRrtStar:
             checked_locations=[]
 
 
-            for x_near in self.Near(self.V, node, self.search_radius,False):
+            for x_near in self.Near(self.V, node, self.search_radius*2,False):
             #for x_near in self.Near(self.V, node, 10):
-                if not ([x_near.x,x_near.y]==[node.x,node.y]) and not ([x_near.x,x_near.y] in checked_locations) and not ([node.parent.x,node.parent.x]==[self.x_goal.x,self.x_goal.y]):
+                if not ([x_near.x,x_near.y]==[node.x,node.y]) and not ([x_near.x,x_near.y] in checked_locations) and not ([node.parent.x,node.parent.y]==[self.x_goal.x,self.x_goal.y]):
                     checked_locations.append([x_near.x,x_near.y])
                     x_temp = Node((node.x, node.y))
                     x_temp.parent = node.parent
@@ -864,6 +910,8 @@ class IRrtStar:
                     x_temp.cost = node.cost
                     x_temp.totalinfo = node.totalinfo
                     x_temp.totalcost = node.totalcost
+                    x_temp.prevroundcost = node.prevroundcost
+                    x_temp.round = node.round
 
                     #if node.parent != self.x_start and node != self.x_start:  # because otherwise there's no "old" path to go back to
                     c_old = node.cost
@@ -873,8 +921,8 @@ class IRrtStar:
                     #     return # if the parent of x_new = x_near, we don't want to make the parent of x_near = x_new (because then we create a loose segment
                     #if (c_new-c_old) < (self.budget-best_node.totalcost): # still within budget
                     # tworoundstrategy2:
-                    costsecondround = best_node.totalcost-costfirstround
-                    if (node.round==1 and (c_new-c_old) < (self.budget-costfirstround)) or (node.round==2 and (c_new-c_old)<(self.budget-costsecondround)): # still within budget
+                    #costsecondround = best_node.totalcost-costfirstround
+                    if ((c_new-c_old)<(self.budget-roundcosts[node.round])): # still within budget
 
                         newnode = Node((x_near.x, x_near.y))
                         newnode.parent = node.parent.parent
@@ -888,6 +936,7 @@ class IRrtStar:
                         dist = self.Line(node.parent.parent, x_near)
                         newnode.cost = node.parent.parent.cost + dist
                         newnode.round = newnode.parent.round
+                        newnode.prevroundcost = newnode.parent.prevroundcost
                         self.LastPath(newnode)
                         info = newnode.info + self.FindInfo(x_near.x, x_near.y, node.x, node.y, newnode,
                                                             self.search_radius, True)
@@ -898,7 +947,7 @@ class IRrtStar:
                         info_new = info
                         if info_new > info_old:  # note: this is different than the condition in pruning
                             self.V.append(newnode)
-                            if (newnode.round==1 and newnode.totalcost<=self.budget) or (newnode.round==2 and (newnode.totalcost-newnode.prevroundcost)<=self.budget):
+                            if ((newnode.totalcost-newnode.prevroundcost)<=self.budget):
                                 #self.X_soln.add(newnode)
                                 self.X_soln.append(newnode)
 
@@ -921,19 +970,23 @@ class IRrtStar:
                                 node.cost = x_temp.cost
                                 node.totalinfo = x_temp.totalinfo
                                 node.totalcost = x_temp.totalcost
+                                node.prevroundcost = x_temp.prevroundcost
+                                node.round = x_temp.round
                                 self.Recalculate(node)
                             else:
                                 bestpath[bestindex + 1] = newnode
                                 # tworoundstrategy2:
-                                if self.multirobot:
-                                    if node.round == 1:
-                                        costfirstround += (c_new - c_old)
-                                    else:  # round 2:
-                                        costsecondround += (c_new - c_old)
-                                else:
-                                    costfirstround += (c_new - c_old)
+                                # if self.multirobot:
+                                #     if node.round == 1:
+                                #         costfirstround += (c_new - c_old)
+                                #     else:  # round 2:
+                                #         costsecondround += (c_new - c_old)
+                                # else:
+                                #     costfirstround += (c_new - c_old)
+                                roundcosts[node.round] += (c_new - c_old)
 
-                                print("Improved path through hindsight rewiring with increase in info: "+str(best_node.totalinfo-totalinfo))
+                                if self.print:
+                                    print("Improved path through hindsight rewiring with increase in info: "+str(best_node.totalinfo-totalinfo))
                                 totalinfo=best_node.totalinfo
                             # # bit of debugging:
                             # thisnode=x_new
@@ -952,10 +1005,11 @@ class IRrtStar:
                 # if i==len(bestpath):
                 #     notfinished=False
         #print("End rewiring after v2")
-        print(" Info: " + str(best_node.info) + " Tot. info: " + str(
-            best_node.totalinfo) + " Cost: " + str(best_node.totalcost))
-        if best_node.totalcost>=self.budget:
-            print("costfirstround var = "+str(costfirstround))
+        if self.print:
+            print("Info: " + str(best_node.info) + " Tot. info: " + str(
+                best_node.totalinfo) + " Cost: " + str(best_node.totalcost))
+        # if best_node.totalcost>=self.budget:
+        #     print("costfirstround var = "+str(costfirstround))
         return best_node
 
 
@@ -976,6 +1030,16 @@ class IRrtStar:
                     # most recent: 
                     if (((node2.cost<=node1.cost and node2.info>node1.info) or (node2.cost<node1.cost and node2.info==node1.info) or (node1.parent==node2.parent and index!=index2)) 
                         and (node1.round==(round+1) and node2.round==(round+1))): #prune lesser paths or doubles
+                    # PRUNING segment based:
+                    #round cost based
+                    # if ((((node2.cost-node2.prevroundcost)<=(node1.cost-node1.prevroundcost) and ((node2.info)>(node1.info))) or ((node2.cost-node2.prevroundcost)<(node1.cost-node1.prevroundcost) and (node2.info)==(node1.info)) or (node1.parent==node2.parent and index!=index2)) 
+                    #     and (node1.round==(round+1) and node2.round==(round+1))): #prune lesser paths or doubles
+                    # parent based/ round
+                    # if (((node2.cost<=node1.cost and node2.info>node1.info) or (node2.cost<node1.cost and node2.info==node1.info) or (node1.parent==node2.parent and index!=index2)) 
+                    #     and (node1.round==(round+1) and node2.round==(round+1)) and (node1.info-node1.parent.info)==0): #prune lesser paths or doubles
+                    # parent segment based
+                    # if ((((node2.cost-node2.prevroundcost)<=(node1.cost-node1.prevroundcost) and ((node2.info-node2.parent.info)>(node1.info-node1.parent.info))) or ((node2.cost-node2.prevroundcost)<(node1.cost-node1.prevroundcost) and (node2.info-node2.parent.info)==(node1.info-node1.parent.info)) or (node1.parent==node2.parent and index!=index2)) 
+                    #     and (node1.round==(round+1) and node2.round==(round+1))): #prune lesser paths or doubles
                     # more cons: if (node2.cost<=node1.cost and node2.info>node1.info and (node1.info-node1.parent.info)==0) or (node2.cost<node1.cost and node2.info==node1.info and (node1.info-node1.parent.info)==0) or (node1.parent==node2.parent and index!=index2): #prune lesser paths or doubles
                     #if (node2.cost <= node1.cost and node2.info > node1.info) or (node1.parent == node2.parent and index != index2):  # prune lesser paths or doubles
 
@@ -985,10 +1049,13 @@ class IRrtStar:
                     # else:
                         #     print("Alternative pruned")
                         # prune the node from all nodes
+
+
+                        # I think it should be impossible for this node to have children already since we rewire afterwards, so let's remove this
                         nochildren=True
-                        for allnode in self.V:
-                            if allnode.parent==node1: # in this case we can't prune the node because other nodes depend on it
-                                nochildren=False
+                        # for allnode in self.V:
+                        #     if allnode.parent==node1: # in this case we can't prune the node because other nodes depend on it
+                        #         nochildren=False
                         if nochildren:
                             # if (node1.cost == node2.cost and node1.info == node2.info and index != index2 and node1.parent == node2.parent):
                             #     print("Double detected, now pruned")
@@ -1000,22 +1067,24 @@ class IRrtStar:
                             if node1 in self.X_soln:
                                 self.X_soln.remove(node1) #remove from solutions
 
-    def RoundTwoAdd(self, x_new): #TODO: adapt for multiple rounds
+    # def RoundTwoAdd(self, x_new):
+    def MultiRobotAdd(self, x_new): 
         for node in self.X_soln:
             if [node.x,node.y]==[x_new.x,x_new.y]: #all nodes at the new sampled location
                 # tworoundstrategy2:
-                if node.round == 1:
-                    Round2StartNode = Node((self.x_goal.x, self.x_goal.y))
-                    Round2StartNode.cost = node.totalcost
-                    Round2StartNode.totalcost = node.totalcost
-                    Round2StartNode.info = node.info
-                    Round2StartNode.totalinfo = node.totalinfo
-                    Round2StartNode.parent = node
-                    Round2StartNode.round = 2
-                    Round2StartNode.prevroundcost= node.totalcost
-                    self.V.append(Round2StartNode)
+                if node.round < self.multirobot:
+                    NextRoundStartNode = Node((self.x_goal.x, self.x_goal.y))
+                    NextRoundStartNode.cost = node.totalcost
+                    NextRoundStartNode.totalcost = node.totalcost
+                    NextRoundStartNode.info = node.info
+                    NextRoundStartNode.totalinfo = node.totalinfo
+                    NextRoundStartNode.parent = node
+                    NextRoundStartNode.round = node.round+1
+                    NextRoundStartNode.prevroundcost= node.totalcost # prevroundcost = costs of all previous rounds
+                    #NextRoundStartNode.prevroundcost= node.totalcost-node.prevroundcost
+                    self.V.append(NextRoundStartNode)
                     #self.X_soln.add(Round2StartNode)
-                    self.X_soln.append(Round2StartNode)
+                    self.X_soln.append(NextRoundStartNode)
 
             # end tworoundstrategy2
 
@@ -1032,8 +1101,8 @@ class IRrtStar:
                 notfinished=False # to prevent sampling in obstacle and sampling too far due to rounding
             dist-=1
         #node_new.parent = x_start
-
-        print("nearest=("+str(x_start.x)+","+str(x_start.y)+") - x_rand=("+str(x_goal.x)+","+str(x_goal.y)+") - dist = "+str(dist+1)+" - x_new=("+str(node_new.x)+","+str(node_new.y)+")")
+        if self.print:
+            print("nearest=("+str(x_start.x)+","+str(x_start.y)+") - x_rand=("+str(x_goal.x)+","+str(x_goal.y)+") - dist = "+str(dist+1)+" - x_new=("+str(node_new.x)+","+str(node_new.y)+")")
         return node_new
 
     def Near(self, nodelist, node, max_dist=0, reduction=True):
@@ -1063,7 +1132,7 @@ class IRrtStar:
             if x ** 2 + y ** 2 < 1:
                 return np.array([[x], [y], [0.0]])
 
-    def SampleFreeSpace(self):
+    def SampleFreeSpace(self):      
         xpoint = np.random.random_integers(int(self.x_range[0]), int(self.x_range[1]))
         ypoint = np.random.random_integers(int(self.x_range[0]), int(self.x_range[1]))
         # making sure we actually sample in the free space (and not in edge or obstacle):
@@ -1091,13 +1160,19 @@ class IRrtStar:
 
         # extracting the path
         path = [[self.x_goal.x, self.x_goal.y]]
-
+        rounds=[node.round]
         while node.parent:
             path.append([node.x, node.y])
+            rounds.append(node.round)
             node = node.parent
         path.append([node.x, node.y])  # this should be the start
+        rounds.append(1) # round 1 at start
 
-        return path, currentinfopath
+        path.reverse() # front to back instead of back to front
+        rounds.reverse()
+        currentinfopath.reverse()
+
+        return [path,rounds], currentinfopath
 
 
 
@@ -1225,6 +1300,7 @@ class IRrtStar:
         # Define line colors
         path_color = "red" if pruningstep == 1 else "gray"
         path_color_2 = "violet" # second round
+        path_color_3 = "green" # third round (for now ) #TODO
         # Define transparency
         opacity = 0.8 if (pruningstep == 1 or pruningstep == 2 or pruningstep == 3) else 0.2
 
@@ -1242,8 +1318,10 @@ class IRrtStar:
         
         for node in self.V:
             if node.parent:
-                if node.parent.round==2:
+                if node.parent.round==2: #TODO change for multiround
                     plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-", color=path_color_2, alpha=opacity, linewidth=0.5)
+                elif node.parent.round==3: #TODO change for multiround
+                    plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-", color=path_color_3, alpha=opacity, linewidth=0.5)
                 else:
                     plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-", color=path_color, alpha=opacity, linewidth=0.5)
             elif node != self.x_start:
@@ -1456,17 +1534,17 @@ class IRrtStar:
 
 
 
-def main(uncertaintymatrix,scenario=None,matrices=None,samplelocations=[]):
+def main(uncertaintymatrix,scenario=None,matrices=None,samplelocations=[],iterations=250):
     # mid:
     x_start = (50, 50)  # Starting node
     #x_goal = (37, 18)  # Goal node
     x_goal = (50,50)
     # edge:
-    x_start = (50,0)
-    x_goal = (50,0)
+    x_start = (50,40)
+    x_goal = (50,40)
     # scenario = [rowsbool, budget, informed, rewiring, step_len, search_radius, stopsetting, horizonplanning]
     if scenario:
-        rrt_star = IRrtStar(x_start, x_goal, scenario[4], 0.0, scenario[5], 151, uncertaintymatrix, scenario, matrices, samplelocations)
+        rrt_star = IRrtStar(x_start, x_goal, scenario[4], 0.0, scenario[5], iterations+1, uncertaintymatrix, scenario, matrices, samplelocations)
     else:
         rrt_star = IRrtStar(x_start, x_goal, 15, 0.0, 15, 300,uncertaintymatrix,scenario,matrices,samplelocations)
     [finalpath, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,matrices,samplelocations]=rrt_star.planning()

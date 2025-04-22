@@ -1,3 +1,4 @@
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -54,7 +55,7 @@ def visualize_back_and_forth(budget,x0=0,y0=0,incl_travel=False,startpos=[],show
                 l=l-1
                 path_length = l * (w-1) + (l-1)
                 if w==0: # coverage at this position is not within budget
-                    return False
+                    return False, False
             else:
                 path_length += (travel_start + travel_end)
                 within_budget = True
@@ -137,7 +138,7 @@ def max_coverage(map,budget,startpos,multirobot=1,show=True):
                         best_costs = costs
         for coords in best_travel_coords+best_coords:
             map[coords[1],coords[0]]=0 # update the map to avoid redundancy in paths
-        multi_best_coords.append([best_coords])
+        multi_best_coords.append(best_coords)
         multi_info.append(best_info)
         multi_costs.append(best_costs)
         # Visualize the results if requested
@@ -180,7 +181,7 @@ def addTravelInfo(map,coords,info):
     return info, infopath
 
 
-def animation_max_coverage(info_map, best_path, best_info, title="Max Coverage with Information Map",show=True,pathname=None):
+def animation_max_coverage(info_map, best_path, best_info, title="Max Coverage with Information Map",show=True,pathname=None,rounds=None,size=(100,100)):
     """
     Visualizes the max coverage path over the given information map.
     
@@ -190,6 +191,9 @@ def animation_max_coverage(info_map, best_path, best_info, title="Max Coverage w
     - best_info: Total information gathered along the path.
     - title: Title for the plot (optional).
     """
+    startpos=[50,0]
+    if size!=(100,100):
+        startpos=[50,50-size[1]/2]
     # Translate the points to fit nicely on grid
     coverage_path=[]
     for [x,y] in best_path:
@@ -225,9 +229,12 @@ def animation_max_coverage(info_map, best_path, best_info, title="Max Coverage w
     plt.colorbar(heatmap, cax=cax, label="Information Value",ticks=[])
     
     # Extract x and y coordinates from the path
-    x, y = zip(*coverage_path)
-    x = [xi + 0.5 for xi in x]  # Center path within grid cells
-    y = [yi + 0.5 for yi in y]
+    if coverage_path==[]:
+        x, y = [],[]
+    else:
+        x, y = zip(*coverage_path)
+        x = [xi + 0.5 for xi in x]  # Center path within grid cells
+        y = [yi + 0.5 for yi in y]
     
     # # Plot the field of view (glow effect)
     # for (xi, yi) in coverage_path:
@@ -240,14 +247,58 @@ def animation_max_coverage(info_map, best_path, best_info, title="Max Coverage w
     #     ax.add_patch(rect)
     
     # Draw the coverage path
+    colors = mpl.colormaps['Dark2'].colors
+    color_list = []
+    c=0
+    linewidth = 0.5/(size[0]/100)
+    if not rounds:
+        for i in range(len(x)-1):
+            color_list.append(colors[c])
+            if i>0 and ([x[i],y[i]] == startpos and not [x[i-1],y[i-1]]==startpos):
+                c+=1
+                ax.plot(
+                    [x[i],x[i+1]], [y[i],y[i+1]], color=colors[c], linewidth=linewidth, alpha=0.8, label="Robot "+str((c+1))
+                )
+            elif i==0:
+                ax.plot(
+                    [x[i],x[i+1]], [y[i],y[i+1]], color=colors[c], linewidth=linewidth, alpha=0.8, label="Robot "+str((c+1))
+                )
+            else:
+                ax.plot(
+                    [x[i],x[i+1]], [y[i],y[i+1]], color=colors[c], linewidth=linewidth, alpha=0.8
+                )
+    else:
+        for i in range(len(x)-1):
+            color_list.append(colors[c])
+            if i>0 and (rounds[i-1]!=rounds[i]):
+                c+=1
+                ax.plot(
+                    [x[i],x[i+1]], [y[i],y[i+1]], color=colors[c], linewidth=linewidth, alpha=0.8, label="Robot "+str((c+1))
+                )
+            elif i==0:
+                ax.plot(
+                    [x[i],x[i+1]], [y[i],y[i+1]], color=colors[c], linewidth=linewidth, alpha=0.8, label="Robot "+str((c+1))
+                )
+            else:
+                ax.plot(
+                    [x[i],x[i+1]], [y[i],y[i+1]], color=colors[c], linewidth=linewidth, alpha=0.8
+                )
+
     ax.plot(
-        x, y, color="blue", linewidth=0.5, alpha=0.8, label="Coverage Path"
+        [x[-1],startpos[0]], [y[-1],startpos[1]], color=colors[c], linewidth=linewidth, alpha=0.8
     )
+    #ax.set_prop_cycle(color=color_list)         
+    # ax.plot(
+    #     x, y, linewidth=0.5, alpha=0.8, label="Coverage Path"
+    # )
+
+
+
     
     
     # Add grid and formatting
-    ax.set_xlim(-0.5, w - 0.5)
-    ax.set_ylim(-0.5, l - 0.5)
+    ax.set_xlim(-0.5+(50-size[0]/2), w - 0.5 - (50-size[0]/2))
+    ax.set_ylim(-0.5+(50-size[1]/2), l - 0.5 - (50-size[1]/2))
     #ax.grid(visible=True, color="grey", linestyle="--", linewidth=0.5, alpha=0.6)
     #ax.set_xticks(range(0, w))
     #ax.set_yticks(range(0, l))
@@ -260,14 +311,25 @@ def animation_max_coverage(info_map, best_path, best_info, title="Max Coverage w
     # ax.text(w, l / 2, f"$l$ = {l}", fontsize=10, color="black", rotation=90, va="center")
     
     # Emphasize total information collected
-    ax.text(
-        w / 2, -3.5, f"$Total$ $Information$ $Collected$ = ${best_info:.2f}$", 
-        fontsize=12, color="grey", ha="center", fontweight="bold"
-    )
-    
+    if size==(100,100):
+        ax.text(
+            w / 2, -3.5, f"$Total$ $Information$ $Collected$ = ${best_info:.2f}$", 
+            fontsize=12, color="grey", ha="center", fontweight="bold"
+        )
+    else:
+        ax.text(
+            w / 2, -1.5 + (50-size[1]/2), f"$Total$ $Information$ $Collected$ = ${best_info:.2f}$", 
+            fontsize=12, color="grey", ha="center", fontweight="bold"
+        )
+
     # Add title and legend
     ax.set_title(title, fontsize=14, color="black")
-    ax.legend(loc="upper right", facecolor="white", edgecolor="black")
+    if c==0 and not pathname:
+        ax.legend(["Coverage Path"],loc="upper right", facecolor="white", edgecolor="black")
+    elif c==0 and pathname: # 1-robot tests
+        ax.legend(["Robot 1"],loc="upper right", facecolor="white", edgecolor="black")
+    else:
+        ax.legend(loc="upper right", facecolor="white", edgecolor="black")
     
     plt.tight_layout()
     if pathname:
