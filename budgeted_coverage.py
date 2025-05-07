@@ -270,7 +270,7 @@ def animation_max_coverage(info_map, best_path, best_info, title="Max Coverage w
     else:
         for i in range(len(x)-1):
             color_list.append(colors[c])
-            if i>0 and (rounds[i-1]!=rounds[i]):
+            if i>0 and (rounds[i-1]<rounds[i]):
                 c+=1
                 ax.plot(
                     [x[i],x[i+1]], [y[i],y[i+1]], color=colors[c], linewidth=linewidth, alpha=0.8, label="Robot "+str((c+1))

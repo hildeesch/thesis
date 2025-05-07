@@ -123,7 +123,7 @@ def prepandtest(test="comparison"):
                     continue # skip to the next scenario if we had this one already
                 time_start=time.process_time()
                 [path, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
-                                    matrices,samplelocations] = rig_matrix(informed_matrix,settings)
+                                    matrices,samplelocations_saved] = rig_matrix(uncertaintymatrix=informed_matrix,scenario=settings,iterations=250,samplelocations=[])
                 finalpath=path[0]
                 rounds=path[1]
                 time_end = time.process_time()
@@ -134,6 +134,11 @@ def prepandtest(test="comparison"):
                 np.save(pathname + 'finalcosts.npy', finalcost)
                 np.save(pathname + 'computingtime.npy', time_total)
 
+                np.save(pathname + 'finalpath.npy', finalpath) # to change viz if needed
+                np.save(pathname + 'rounds.npy', rounds) # to change viz if needed
+                np.save(pathname + 'infopath.npy', infopath) # to change viz if needed
+                np.save(pathname + 'totalinfomatrix.npy', np.nansum(uncertainty_matrix))
+                
                 # Uninformed method
                 pathname = str("Result_files/small/comparison/") + str(scenario) + str("_uninformed_")+str(it)+str("/")
                 if not os.path.exists(pathname):
@@ -141,8 +146,10 @@ def prepandtest(test="comparison"):
                 uniform_matrix = deepcopy(uncertainty_matrix)
                 uniform_matrix[uniform_matrix >= 0.0] = 0.001
                 time_start=time.process_time()
-                [path, infopath, finalcost, uninf_finalinfo, budget, steplength, searchradius, iteration,
-                                    matrices,samplelocations] = rig_matrix(uniform_matrix,settings)
+                #[path, infopath, finalcost, uninf_finalinfo, budget, steplength, searchradius, iteration,
+                #                    matrices,samplelocations] = rig_matrix(uniform_matrix,settings)
+                [path, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
+                                    matrices,samplelocations] = rig_matrix(uncertaintymatrix=uniform_matrix,scenario=settings,samplelocations=samplelocations_saved,iterations=250)
                 finalpath=path[0]
                 rounds=path[1]
                 nodelist = []
@@ -158,6 +165,11 @@ def prepandtest(test="comparison"):
                 np.save(pathname + 'finalcosts.npy', finalcost)
                 np.save(pathname + 'computingtime.npy', time_total)
 
+                np.save(pathname + 'finalpath.npy', finalpath) # to change viz if needed
+                np.save(pathname + 'rounds.npy', rounds) # to change viz if needed
+                np.save(pathname + 'infopath.npy', infopath) # to change viz if needed
+                np.save(pathname + 'totalinfomatrix.npy', np.nansum(uncertainty_matrix))
+                
                 # Budgeted coverage
                 budget_matrix = deepcopy(uncertainty_matrix)
                 pathname = str("Result_files/small/comparison/") + str(scenario) + str("_coverage_")+str(it)+str("/")
@@ -173,6 +185,10 @@ def prepandtest(test="comparison"):
                 np.save(pathname + 'finalinfo.npy', finalinfo)
                 np.save(pathname + 'finalcosts.npy', finalcost)
                 np.save(pathname + 'computingtime.npy', time_total)
+                   
+                np.save(pathname + 'finalpath.npy', finalpath) # to change viz if needed
+                np.save(pathname + 'infopath.npy', infopath) # to change viz if needed
+                np.save(pathname + 'totalinfomatrix.npy', np.nansum(uncertainty_matrix))
 
                 # Total info in the map:
                 pathname = str("Result_files/small/comparison/") + str(scenario) +str("_")+str(it)+str("/") 
@@ -191,7 +207,7 @@ def prepandtest(test="comparison"):
         settings,[gaussians_nr,gaussians_size] = getSettings(scenario)
                     
         for it in range(10):
-            pathname = str("Result_files/small/increasing_iterations/") + str(it) + '_uncertainty_matrix.npy'
+            pathname = str("Result_files/small/increasing_iterations/") + str(it) + '/uncertainty_matrix.npy'
 
             if not os.path.exists(pathname):
                 if gaussians_size==1:
@@ -203,19 +219,20 @@ def prepandtest(test="comparison"):
                 samplelocations_loaded=False
             else:
                 uncertainty_matrix = np.load(pathname)
-                pathname = str("Result_files/small/increasing_iterations/") + str(it) + '_samplelocations.npy'
+                pathname = str("Result_files/small/increasing_iterations/") + str(it) + '/samplelocations.npy'
                 samplelocations_saved = np.load(pathname)
                 samplelocations_loaded = True
 
             for budget in [round((399/100)*10),round((399/100)*25)]:
                 for robots in [2,1,5]:
+                #for robots in [1]:
                     for iterations in [200,150,125,100,75,50,25]:
                         settings[1] = budget
                         settings[7] = robots
 
                         # Our method
                         informed_matrix = deepcopy(uncertainty_matrix)
-                        pathname = str("Result_files/small/increasing_iterations/") + str(scenario) + str("_method_b")+str(budget)+"_r"+str(robots)+"_it"+str(iterations)+"_"+str(it)+str("/")
+                        pathname = str("Result_files/small/increasing_iterations/") +str(it)+str("/") + str(scenario) + str("_method_b")+str(budget)+"_r"+str(robots)+"_"+str(iterations)+str("/")
                         if not os.path.exists(pathname):
                             os.makedirs(pathname)
                         else:
@@ -227,9 +244,9 @@ def prepandtest(test="comparison"):
                         rounds=path[1]
                         if samplelocations_loaded==False:
                             samplelocations_saved=samplelocations
-                            pathname = str("Result_files/small/increasing_iterations/") + str(it) + '_samplelocations.npy'
+                            pathname = str("Result_files/small/increasing_iterations/") + str(it) + '/samplelocations.npy'
                             np.save(pathname, samplelocations_saved)
-                            pathname = str("Result_files/small/increasing_iterations/") + str(scenario) + str("_method_b")+str(budget)+"_r"+str(robots)+"_it"+str(iterations)+"_"+str(it)+str("/")
+                            pathname = str("Result_files/small/increasing_iterations/") +str(it)+str("/") + str(scenario) + str("_method_b")+str(budget)+"_r"+str(robots)+"_"+str(iterations)+str("/")
                             samplelocations_loaded = True
                         time_end = time.process_time()
                         time_total = time_end-time_start
@@ -409,6 +426,7 @@ if __name__ == '__main__':
     #default()
     #prepandtest()
     prepandtest("increasing_iterations")
+    #prepandtest("comparison")
     #minimum_example()
     #multi_robot()
     #coverage()

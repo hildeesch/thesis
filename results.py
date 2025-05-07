@@ -260,27 +260,31 @@ def analyze_results_new(test="comparison"):
                     uncertainty_matrix_sum = np.load(pathname + 'totalinfomatrix.npy')    
                     print("Totalinfo: ", uncertainty_matrix_sum,)
                     print("") #whiteline between scenarios
-    elif test == "increasing_iterations_small":
-        scenario = [1,2,2,1]                            
-        for it in range(10):
-            for budget in [round((399/100)*10),round((399/100)*25)]:
-                for robots in [1,2,5]:
-                    print("Scenario - Budget: ",budget," Robots: ",robots)
-                    for iterations in [200,150,125,100,75,50,25]:
-                        pathname = str("Result_files/small/increasing_iterations/") + str(scenario) + str("_method_b")+str(budget)+"_r"+str(robots)+"_it"+str(iterations)+"_"+str(it)+str("/")
-                        finalinfo = np.load(pathname + 'finalinfo.npy')
-                        finalcost = np.load(pathname + 'finalcosts.npy')
-                        time_total = np.load(pathname + 'computingtime.npy')
-                        print("it: ",iterations," Info: ", finalinfo, " Cost: ",finalcost, " Time: ",time_total)
+    # elif test == "increasing_iterations_small":
+    #     scenario = [1,2,2,1]                            
+    #     for it in range(10):
+    #         for budget in [round((399/100)*10),round((399/100)*25)]:
+    #             for robots in [1,2,5]:
+    #                 print("Scenario - Budget: ",budget," Robots: ",robots)
+    #                 for iterations in [200,150,125,100,75,50,25]:
+    #                     pathname = str("Result_files/small/increasing_iterations/") + str(scenario) + str("_method_b")+str(budget)+"_r"+str(robots)+"_it"+str(iterations)+"_"+str(it)+str("/")
+    #                     finalinfo = np.load(pathname + 'finalinfo.npy')
+    #                     finalcost = np.load(pathname + 'finalcosts.npy')
+    #                     time_total = np.load(pathname + 'computingtime.npy')
+    #                     print("it: ",iterations," Info: ", finalinfo, " Cost: ",finalcost, " Time: ",time_total)
 
-                        path = np.load(pathname + "finalpath.npy")
-                        #print(path)
+    #                     path = np.load(pathname + "finalpath.npy")
+    #                     #print(path)
 
-                    # Total info in the map:
-                    uncertainty_matrix_sum = np.load(pathname + 'totalinfomatrix.npy')    
-                    print("Totalinfo: ", uncertainty_matrix_sum,)
-                    print("") #whiteline between scenarios
-
+    #                 # Total info in the map:
+    #                 uncertainty_matrix_sum = np.load(pathname + 'totalinfomatrix.npy')    
+    #                 print("Totalinfo: ", uncertainty_matrix_sum,)
+    #                 print("") #whiteline between scenarios
+    rounds = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r5_it200_1/rounds.npy"))
+    path = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r5_it200_1/finalpath.npy"))
+    for i in range(len(rounds)):
+        print(path[i],rounds[i])
+    
 if __name__ == '__main__':
     #analyze_results()
     # visualize_results()

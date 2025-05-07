@@ -796,7 +796,7 @@ class IRrtStar:
                             newnode.prevroundcost = x_near.prevroundcost
                         else:
                             x_near.prevroundcost=x_near.parent.parent.prevroundcost
-                            newnode.round=x_near.round
+                            newnode.round=x_near.parent.parent.round
                             newnode.prevroundcost=x_near.parent.parent.prevroundcost
                     if (x_near not in self.X_soln) and (x_near.totalcost<=self.budget): #TODO: add second round thing (budget)
                         self.X_soln.append(x_near)

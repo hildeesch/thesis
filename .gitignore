@@ -3,6 +3,7 @@
 
 # ignore ALL files in ANY directory named temp
 temp/
+Result_files/
 
 # ignore ALL cache files
 *.pyc
