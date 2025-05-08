@@ -280,10 +280,12 @@ def analyze_results_new(test="comparison"):
     #                 uncertainty_matrix_sum = np.load(pathname + 'totalinfomatrix.npy')    
     #                 print("Totalinfo: ", uncertainty_matrix_sum,)
     #                 print("") #whiteline between scenarios
-    rounds = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r5_it200_1/rounds.npy"))
-    path = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r5_it200_1/finalpath.npy"))
-    for i in range(len(rounds)):
-        print(path[i],rounds[i])
+    # rounds = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r5_it200_1/rounds.npy"))
+    # path = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r5_it200_1/finalpath.npy"))
+    # for i in range(len(rounds)):
+    #     print(path[i],rounds[i])
+    time = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r2_it100_0/computingtime.npy"))
+    print("Time: ", time)
     
 if __name__ == '__main__':
     #analyze_results()

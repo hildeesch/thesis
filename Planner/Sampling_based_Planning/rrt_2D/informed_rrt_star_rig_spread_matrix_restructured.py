@@ -11,6 +11,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as Rot
 import matplotlib.patches as patches
+from scipy.spatial import KDTree
+
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) +
                 "/../../Sampling_based_Planning/")
@@ -40,7 +42,14 @@ class Node:
         self.round=1
         self.prevroundcost=0
 
+    def __eq__(self, other):
+        return isinstance(other, Node) and self.x == other.x and self.y == other.y and self.parent == other.parent
 
+    def __hash__(self):
+        return hash((self.x, self.y, self.parent))
+    
+    def has_same_position(self,other):
+        return (self.x==other.x and self.y==other.y)
 
 class IRrtStar:
     def __init__(self, x_start, x_goal, step_len,
@@ -88,6 +97,7 @@ class IRrtStar:
 
         if len(samplelocations)>0:
             self.samplelocations_add=False
+            print(self.samplelocations)
         else:
             self.samplelocations_add = True
             self.samplelocations=[]
@@ -131,6 +141,9 @@ class IRrtStar:
         c_best = np.inf
         i_best = 0.001
         startlen=0 # for checking node increase
+        sampled_locations = set()
+        self.kdtree_xsoln = None
+        self.kdtree_V = None
 
         k=0
         double=False # for viz purposes it is defined here
@@ -207,7 +220,8 @@ class IRrtStar:
             timeend=time.time()
             self.time[0]+=(timeend-timestart)
             timestart=time.time()
-            x_nearest = self.Nearest(self.V, x_rand)
+            self.kdtree_V = self.build_kdtree(self.V)
+            x_nearest = self.Nearest(self.V, x_rand,self.kdtree_V)
             timeend = time.time()
             self.time[1] += (timeend - timestart)
             timestart=time.time()
@@ -218,24 +232,24 @@ class IRrtStar:
                 #just for debugging purposes (for now)
                 #print("Past the budget")
             double=False
-            for node in self.V:
-                if node.x == x_new.x and node.y == x_new.y:  # co-located nodes
-                    double=True #there is already a node at this location, so we skip it
-                    # print("double")
-                    k-=1
-                    if self.samplelocations_add:
-                        self.samplelocations.pop()
-                    break
+            if (x_new.x,x_new.y) in sampled_locations:  # co-located nodes
+                double=True #there is already a node at this location, so we skip it
+                # print("double")
+                k-=1
+                if self.samplelocations_add:
+                    self.samplelocations.pop()
             #if x_nearest.cost + self.Line(x_nearest, x_new) + self.Line(x_new, self.x_goal) < self.budget and not double:  # budget check for nearest parent (to make it more efficient)
             if not double:  # budget check for nearest parent (to make it more efficient)
                 # print(x_nearest.cost + self.Line(x_nearest, x_new) + self.Line(x_new, self.x_goal))
                 node_new=[]
+                sampled_locations.add((x_new.x,x_new.y))
 
                 # doubleroundstrategy:
                 # if day == 1:
                 #     print(len(self.Near(self.V, x_new)))
 
-                for x_near in self.Near(self.X_soln,x_new):
+                #for x_near in self.Near(self.X_soln,x_new):
+                for x_near in self.Near(self.V,x_new,kdtree=self.kdtree_V):
                     node_new = Node((x_new.x, x_new.y))
                     node_new.parent = x_near  # added
                     dist = self.get_distance_and_angle(x_near,node_new)[0]
@@ -250,12 +264,13 @@ class IRrtStar:
                         node_new.round = node_new.parent.round
                         node_new.prevroundcost=node_new.parent.prevroundcost
 
-                    timestart = time.time()
-                    self.LastPath(node_new)
-                    timeend = time.time()
-                    self.time[5] += (timeend - timestart)
+                    node_new.totalcost=node_new.cost+ self.Line(node_new,self.x_goal)
                     # Simplified condition for both single and multirobot:
                     if (node_new.totalcost-node_new.prevroundcost) <= (self.budget):
+                        timestart = time.time()
+                        self.LastPath(node_new)
+                        timeend = time.time()
+                        self.time[5] += (timeend - timestart)
                         self.X_soln.append(node_new)
                     # if node_new.totalcost <= self.budget:  # extra check for budget for actual parent
                     #     self.X_soln.append(node_new)
@@ -287,8 +302,10 @@ class IRrtStar:
                 if self.multirobot:
                     #self.RoundTwoAdd(node_new)
                     self.MultiRobotAdd(x_new)
-
+                timestart = time.time()
                 self.Rewiring_new(x_new)
+                timeend= time.time()
+                self.time[4] += (timeend-timestart)
                 #print("node_new: ("+str(node_new.x)+","+str(node_new.y)+")")
 
 
@@ -311,7 +328,7 @@ class IRrtStar:
                 #    self.animation()
                    self.animation_new()
                 self.time[7] = time.time()-totalstarttime
-                #print(self.time)
+                print(self.time)
                 if k>0:
                     print("It.: ", k, " Time: " ,self.time[7], " Info: ",x_best.info, " Tot. info: ",x_best.totalinfo, " Cost: ",x_best.cost, " Totalcost: ",x_best.totalcost," Round: ",x_best.round," Nodes: ",len(self.V))
                     #print("It.: " + str(k) + " Time: " + str(self.time[7]) + " Info: " + str(x_best.info) + " Tot. info: "+str(x_best.totalinfo) + " Cost: " + str(x_best.cost) + " Totalcost: "+str(x_best.totalcost) +" Nodes: "+str(len(self.V)))
@@ -659,21 +676,24 @@ class IRrtStar:
         #node_start = the (potential) parent
         #currentinfopath = the infopath of the parent (node_start)
         #distance = the distance between the nodes (e.g. self.step_len or search_radius)
+        idx_start = node_start_y * 100 + node_start_x
+        idx_end = node_end_y * 100 + node_end_x
 
-        info = self.infomatrix[node_start_y * 100 + node_start_x,node_end_y * 100 + node_end_x]
-        infopath = self.infopathmatrix[node_start_y * 100 + node_start_x,node_end_y * 100 + node_end_x]
+        info = self.infomatrix[idx_start,idx_end]
+        infopath = self.infopathmatrix[idx_start,idx_end]
+        infopath_set = set()
         #infopath=None
-        if [node_start_x, node_start_y] == [node_end_x, node_end_y]:
+        if [node_start_x,node_start_y]==[node_end_x,node_end_y]:
             infopath = [[node_start_x,node_start_y]]
             info=self.uncertaintymatrix[node_start_y,node_start_x]
-            self.infomatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = info
+            self.infomatrix[idx_start, idx_end] = info
             self.infomatrix[
-                node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = info  # mirror the matrix
-            self.infopathmatrix[node_start_y * 100 + node_start_x, node_end_y * 100 + node_end_x] = infopath[::]
-            self.infopathmatrix[node_end_y * 100 + node_end_x, node_start_y * 100 + node_start_x] = infopath[
+                idx_end, idx_start] = info  # mirror the matrix
+            self.infopathmatrix[idx_start, idx_end] = infopath[::]
+            self.infopathmatrix[idx_end, idx_start] = infopath[
                                                                                                     ::-1]  # mirror the matrix
 
-        if infopath == None:
+        if infopath is None:
 
             dt = 1 / (2 * distance)
             t = 0
@@ -684,28 +704,31 @@ class IRrtStar:
                 yline = node_end_y - node_start_y
                 xpoint = round(node_start_x + t * xline)
                 ypoint = round(node_start_y + t * yline)
-                if not [xpoint,ypoint] in infopath:
-                    if not np.isnan(self.uncertaintymatrix[ypoint, xpoint]):
-                        info += self.uncertaintymatrix[ypoint, xpoint]
+                if not (xpoint,ypoint) in infopath_set:
+                    value = self.uncertaintymatrix[ypoint, xpoint]
+                    if not np.isnan(value):
+                        info += value
                         infopath.append([xpoint, ypoint])
-                    if np.isnan(self.uncertaintymatrix[ypoint, xpoint]):  # to prevent going through edges and/or obstacles
-                        self.costmatrix[node_start_y * 100 + node_start_x,node_end_y * 100 + node_end_x] = np.inf
+                        infopath_set.add((xpoint, ypoint))
+                    if np.isnan(value):  # to prevent going through edges and/or obstacles
+                        self.costmatrix[idx_start,idx_end] = np.inf
                 if self.inforadius>0:
                     for rowdist in range(-self.inforadius,self.inforadius+1):
                         for coldist in range(-self.inforadius,self.inforadius+1):
                             if (coldist**2+rowdist**2)<=self.inforadius**2: #radius
                                 xpoint_=xpoint+coldist
                                 ypoint_=ypoint+rowdist
-                                if not [xpoint_, ypoint_] in infopath and not np.isnan(self.uncertaintymatrix[ypoint_, xpoint_]):
+                                if not (xpoint_, ypoint_) in infopath and not np.isnan(self.uncertaintymatrix[ypoint_, xpoint_]):
                                     info += self.uncertaintymatrix[ypoint_, xpoint_]
                                     infopath.append([xpoint_, ypoint_]) #TODO: decide if we want to add the nan points to the infopath or not (in that case we need to change some stuff below)
+                                    infopath_set.add((xpoint_,ypoint_))
                 t += dt
 
 
-            self.infomatrix[node_start_y * 100 + node_start_x,node_end_y * 100 + node_end_x] = info
-            self.infomatrix[node_end_y * 100 + node_end_x,node_start_y * 100 + node_start_x] = info # mirror the matrix
-            self.infopathmatrix[node_start_y * 100 + node_start_x,node_end_y * 100 + node_end_x] = infopath[::]
-            self.infopathmatrix[node_end_y * 100 + node_end_x,node_start_y * 100 + node_start_x] = infopath[::-1] # mirror the matrix
+            self.infomatrix[idx_start,idx_end] = info
+            self.infomatrix[idx_end,idx_start] = info # mirror the matrix
+            self.infopathmatrix[idx_start,idx_end] = infopath[::]
+            self.infopathmatrix[idx_end,idx_start] = infopath[::-1] # mirror the matrix
         #if totalpath: #if we want to append the current path to the new path
         infonode = 0
         currentinfopath=[]
@@ -757,7 +780,7 @@ class IRrtStar:
 
     def Rewiring_new(self,x_new): # adapt for multi-robot
         for x_near in self.Near(self.V, x_new, self.search_radius,False):
-            if x_near!=self.x_start and (x_near.parent.x,x_near.parent.y)!=(self.x_start.x,self.x_start.y): # not the start of the route and not the start of the next round
+            if x_near!=self.x_start and not x_near.parent.has_same_position(self.x_start): # not the start of the route and not the start of the next round
                 c_near = x_near.cost
                 c_new = x_near.parent.parent.cost + self.Line(x_near.parent.parent, x_new) + self.Line(x_new,x_near)            
                 # I think this doesn't apply in our case:
@@ -779,8 +802,9 @@ class IRrtStar:
                                                                                 True)
                     newnode.cost = x_near.parent.parent.cost + self.Line(x_near.parent.parent, x_new)
                     self.V.append(newnode)
-                    self.LastPath(newnode)
+                    newnode.totalcost=newnode.cost+ self.Line(newnode,self.x_goal)
                     if ((newnode.totalcost-newnode.prevroundcost) <= (self.budget)):
+                        self.LastPath(newnode)
                         self.X_soln.append(newnode)
 
                     info = newnode.info + self.FindInfo(x_near.x, x_near.y, newnode.x, newnode.y, newnode,
@@ -897,13 +921,13 @@ class IRrtStar:
 
             #print("Best index: "+str(bestindex))
             #print(node.parent.parent.x, node.parent.parent.y)
-            checked_locations=[]
+            checked_locations=set()
 
 
             for x_near in self.Near(self.V, node, self.search_radius*2,False):
             #for x_near in self.Near(self.V, node, 10):
-                if not ([x_near.x,x_near.y]==[node.x,node.y]) and not ([x_near.x,x_near.y] in checked_locations) and not ([node.parent.x,node.parent.y]==[self.x_goal.x,self.x_goal.y]):
-                    checked_locations.append([x_near.x,x_near.y])
+                if not (x_near.has_same_position(node)) and not ((x_near.x,x_near.y) in checked_locations) and not (node.parent.has_same_position(self.x_goal)):
+                    checked_locations.add((x_near.x,x_near.y))
                     x_temp = Node((node.x, node.y))
                     x_temp.parent = node.parent
                     x_temp.info = node.info
@@ -1019,7 +1043,7 @@ class IRrtStar:
             costlist=[]
             infolist=[]
             for node in self.V:
-                if node.x==x_new.x and node.y==x_new.y: #co-located nodes
+                if node.has_same_position(x_new): #co-located nodes
                     nodelist.append(node) # so we know which nodes are colocated
                     costlist.append(node.cost) #to compare the costs
                     infolist.append(node.info) #to compare the info values
@@ -1070,7 +1094,7 @@ class IRrtStar:
     # def RoundTwoAdd(self, x_new):
     def MultiRobotAdd(self, x_new): 
         for node in self.X_soln:
-            if [node.x,node.y]==[x_new.x,x_new.y]: #all nodes at the new sampled location
+            if node.has_same_position(x_new): #all nodes at the new sampled location
                 # tworoundstrategy2:
                 if node.round < self.multirobot:
                     NextRoundStartNode = Node((self.x_goal.x, self.x_goal.y))
@@ -1105,17 +1129,24 @@ class IRrtStar:
             print("nearest=("+str(x_start.x)+","+str(x_start.y)+") - x_rand=("+str(x_goal.x)+","+str(x_goal.y)+") - dist = "+str(dist+1)+" - x_new=("+str(node_new.x)+","+str(node_new.y)+")")
         return node_new
 
-    def Near(self, nodelist, node, max_dist=0, reduction=True):
+    def build_kdtree(self,nodelist):
+        return KDTree([(nd.x, nd.y) for nd in nodelist])
+    
+    def Near(self, nodelist, node, max_dist=0, reduction=True, kdtree=None):
         timestart=time.time()
         if max_dist==0:
             max_dist = self.step_len
-        dist_table = [self.get_distance_and_angle(nd,node)[0] for nd in nodelist]
-        X_near = [nodelist[ind] for ind in range(len(dist_table)) if (dist_table[ind] <= max_dist and dist_table[ind] > 0.0)]
+        if kdtree==None:
+            kdtree = self.build_kdtree(nodelist)
+        indices = kdtree.query_ball_point((node.x, node.y), max_dist)
+        X_near = [nodelist[i] for i in indices if (nodelist[i].x != node.x or nodelist[i].y != node.y)]
+
         timeend = time.time()
         self.time[3] += (timeend - timestart)
         limit = 500
         if len(X_near)>limit and max_dist>=5 and reduction: # if it returns many results, we decrease the radius (when reduction is set to True)
-            X_near_reducted = self.Near(nodelist,node,max_dist-1)
+            X_near_reducted = self.Near(nodelist,node,max_dist-1,kdtree=kdtree)
+            print("Reduce Near")
             if len(X_near_reducted)>0:
                 return X_near_reducted
             else:
@@ -1188,11 +1219,13 @@ class IRrtStar:
         return C
 
     #@staticmethod
-    def Nearest(self,nodelist, n):
-        return nodelist[int(np.argmin([self.get_distance_and_angle(nd, n)[0] for nd in nodelist]))]
+    def Nearest(self,nodelist, n, kd_tree):
+        # Query the nearest point (returns distance and index)
+        dist, idx = kd_tree.query((n.x, n.y))
+        return nodelist[idx]
+        #return nodelist[int(np.argmin([self.get_distance_and_angle(nd, n)[0] for nd in nodelist]))]
 
-        # return nodelist[int(np.argmin([(nd.x - n.x) ** 2 + (nd.y - n.y) ** 2
-        #                                for nd in nodelist]))]
+
 
     #@staticmethod
     def Line(self,x_start, x_goal):
@@ -1200,7 +1233,8 @@ class IRrtStar:
         return dist
 
     def LastPath(self,node):
-        node.totalcost=node.cost+ self.Line(node,self.x_goal)
+        if node.totalcost==0:
+            node.totalcost=node.cost+ self.Line(node,self.x_goal)
         info = self.FindInfo(self.x_goal.x,self.x_goal.y,node.x,node.y,node,node.totalcost-node.cost,False)
 
 
