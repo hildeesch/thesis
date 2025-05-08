@@ -142,8 +142,6 @@ class IRrtStar:
         i_best = 0.001
         startlen=0 # for checking node increase
         sampled_locations = set()
-        self.kdtree_xsoln = None
-        self.kdtree_V = None
 
         k=0
         double=False # for viz purposes it is defined here
@@ -220,8 +218,7 @@ class IRrtStar:
             timeend=time.time()
             self.time[0]+=(timeend-timestart)
             timestart=time.time()
-            self.kdtree_V = self.build_kdtree(self.V)
-            x_nearest = self.Nearest(self.V, x_rand,self.kdtree_V)
+            x_nearest = self.Nearest(self.V, x_rand)
             timeend = time.time()
             self.time[1] += (timeend - timestart)
             timestart=time.time()
@@ -249,7 +246,7 @@ class IRrtStar:
                 #     print(len(self.Near(self.V, x_new)))
 
                 #for x_near in self.Near(self.X_soln,x_new):
-                for x_near in self.Near(self.V,x_new,kdtree=self.kdtree_V):
+                for x_near in self.Near(self.V,x_new):
                     node_new = Node((x_new.x, x_new.y))
                     node_new.parent = x_near  # added
                     dist = self.get_distance_and_angle(x_near,node_new)[0]
@@ -1129,24 +1126,17 @@ class IRrtStar:
             print("nearest=("+str(x_start.x)+","+str(x_start.y)+") - x_rand=("+str(x_goal.x)+","+str(x_goal.y)+") - dist = "+str(dist+1)+" - x_new=("+str(node_new.x)+","+str(node_new.y)+")")
         return node_new
 
-    def build_kdtree(self,nodelist):
-        return KDTree([(nd.x, nd.y) for nd in nodelist])
-    
-    def Near(self, nodelist, node, max_dist=0, reduction=True, kdtree=None):
+    def Near(self, nodelist, node, max_dist=0, reduction=True):
         timestart=time.time()
         if max_dist==0:
             max_dist = self.step_len
-        if kdtree==None:
-            kdtree = self.build_kdtree(nodelist)
-        indices = kdtree.query_ball_point((node.x, node.y), max_dist)
-        X_near = [nodelist[i] for i in indices if (nodelist[i].x != node.x or nodelist[i].y != node.y)]
-
+        dist_table = [self.get_distance_and_angle(nd,node)[0] for nd in nodelist]
+        X_near = [nodelist[ind] for ind in range(len(dist_table)) if (dist_table[ind] <= max_dist and dist_table[ind] > 0.0)]
         timeend = time.time()
         self.time[3] += (timeend - timestart)
         limit = 500
         if len(X_near)>limit and max_dist>=5 and reduction: # if it returns many results, we decrease the radius (when reduction is set to True)
-            X_near_reducted = self.Near(nodelist,node,max_dist-1,kdtree=kdtree)
-            print("Reduce Near")
+            X_near_reducted = self.Near(nodelist,node,max_dist-1)
             if len(X_near_reducted)>0:
                 return X_near_reducted
             else:
