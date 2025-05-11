@@ -11,8 +11,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as Rot
 import matplotlib.patches as patches
-from scipy.spatial import KDTree
-
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) +
                 "/../../Sampling_based_Planning/")
@@ -294,8 +294,10 @@ class IRrtStar:
                     # self.animation(k,x_new,1)
                     self.animation_new(k,x_new,1)
                 if node_new!=[]: # so it has actually been assigned
-                   self.Pruning(node_new) 
-                #tworoundstrategy2: first prune, then create a start of a new round for each node of the first round
+                    timestart= time.time()
+                    self.Pruning(node_new) 
+                    timeend = time.time()
+                    self.time[6] += (timeend - timestart)                #tworoundstrategy2: first prune, then create a start of a new round for each node of the first round
                 if self.multirobot:
                     #self.RoundTwoAdd(node_new)
                     self.MultiRobotAdd(x_new)
@@ -307,10 +309,7 @@ class IRrtStar:
 
 
                 if node_new!=[]: # so it has actually been assigned
-                    timestart=time.time()
                     # self.Pruning(node_new)
-                    timeend = time.time()
-                    self.time[6] += (timeend - timestart)
                     if self.visualizationmode=="steps" and not double: # show all connections after pruning
                         # self.animation(k, x_new,2)
                         self.animation_new(k, x_new,2)
@@ -1034,59 +1033,95 @@ class IRrtStar:
         return best_node
 
 
+    # def Pruning(self, x_new):
+    #     # print("Pre pruning we have ", len(self.V)," nodes")
+    #     pos_key = (x_new.x, x_new.y)
+    #     nodelist_complete = [node for node in self.V if (node.x, node.y) == pos_key]
+    #     to_remove = set()
+
+    #     for round in range(max(1,self.multirobot)): # once if for single robot, else for x nr robots
+    #         nodelist = [n for n in nodelist_complete if n.round == (round + 1)]
+    #         # Sort: lowest cost, then highest info (optimization of the iterations)
+    #         nodelist.sort(key=lambda n: (n.cost, -n.info))
+    #         # now the pruning
+    #         for i, node1 in enumerate(nodelist):
+    #             if node1 in to_remove:
+    #                 continue
+    #             for j in range(i + 1, len(nodelist)):
+    #                 node2 = nodelist[j]
+    #                 if node2 in to_remove:
+    #                     continue
+
+    #                 #if (node2.cost<=node1.cost and node2.info>node1.info): #prune lesser paths or doubles
+    #                 # most recent optimized:
+    #                 same_parent = (node1.parent == node2.parent)
+    #                 dominates = (
+    #                     (node1.cost <= node2.cost and node1.info > node2.info) or
+    #                     (node1.cost < node2.cost and node1.info == node2.info) or
+    #                     (same_parent)
+    #                 )
+    #                 if (dominates): #prune lesser paths or doubles
+    #                     to_remove.add(node2)
+    #     for node in to_remove:
+    #         if node == self.x_best:
+    #             print("[PRUNING] Best node is removed, info: " + str(self.x_best.totalinfo))
+    #         if node in self.V:
+    #             self.V.remove(node)
+    #         if node in self.X_soln:
+    #             self.X_soln.remove(node)
+    #     # print("Post pruning we have ", len(self.V)," nodes")
     def Pruning(self, x_new):
-        for round in range(max(1,self.multirobot)): # once if for single robot, else for x nr robots
-            nodelist=[]
-            costlist=[]
-            infolist=[]
-            for node in self.V:
-                if node.has_same_position(x_new): #co-located nodes
-                    nodelist.append(node) # so we know which nodes are colocated
-                    costlist.append(node.cost) #to compare the costs
-                    infolist.append(node.info) #to compare the info values
-            # now the pruning
-            for index, node1 in enumerate(nodelist):
-                for index2,node2 in enumerate(nodelist):
-                    #if (node2.cost<=node1.cost and node2.info>node1.info): #prune lesser paths or doubles
-                    # most recent: 
-                    if (((node2.cost<=node1.cost and node2.info>node1.info) or (node2.cost<node1.cost and node2.info==node1.info) or (node1.parent==node2.parent and index!=index2)) 
-                        and (node1.round==(round+1) and node2.round==(round+1))): #prune lesser paths or doubles
-                    # PRUNING segment based:
-                    #round cost based
-                    # if ((((node2.cost-node2.prevroundcost)<=(node1.cost-node1.prevroundcost) and ((node2.info)>(node1.info))) or ((node2.cost-node2.prevroundcost)<(node1.cost-node1.prevroundcost) and (node2.info)==(node1.info)) or (node1.parent==node2.parent and index!=index2)) 
-                    #     and (node1.round==(round+1) and node2.round==(round+1))): #prune lesser paths or doubles
-                    # parent based/ round
-                    # if (((node2.cost<=node1.cost and node2.info>node1.info) or (node2.cost<node1.cost and node2.info==node1.info) or (node1.parent==node2.parent and index!=index2)) 
-                    #     and (node1.round==(round+1) and node2.round==(round+1)) and (node1.info-node1.parent.info)==0): #prune lesser paths or doubles
-                    # parent segment based
-                    # if ((((node2.cost-node2.prevroundcost)<=(node1.cost-node1.prevroundcost) and ((node2.info-node2.parent.info)>(node1.info-node1.parent.info))) or ((node2.cost-node2.prevroundcost)<(node1.cost-node1.prevroundcost) and (node2.info-node2.parent.info)==(node1.info-node1.parent.info)) or (node1.parent==node2.parent and index!=index2)) 
-                    #     and (node1.round==(round+1) and node2.round==(round+1))): #prune lesser paths or doubles
-                    # more cons: if (node2.cost<=node1.cost and node2.info>node1.info and (node1.info-node1.parent.info)==0) or (node2.cost<node1.cost and node2.info==node1.info and (node1.info-node1.parent.info)==0) or (node1.parent==node2.parent and index!=index2): #prune lesser paths or doubles
-                    #if (node2.cost <= node1.cost and node2.info > node1.info) or (node1.parent == node2.parent and index != index2):  # prune lesser paths or doubles
+        pos_key = (x_new.x, x_new.y)
+        nodelist_complete = [node for node in self.V if (node.x, node.y) == pos_key]
 
-                            # print("node 1 =("+str(node1.x)+","+str(node1.y)+") parent =("+str(node1.parent.x)+","+str(node1.parent.y)+")")
-                            # print("node 1 cost = "+str(node1.cost)+" node 2 cost ="+str(node2.cost)+"node 1 info = "+str(node1.info)+" node 2 info ="+str(node2.info))
-                            # print("node 2 =(" + str(node2.x) + "," + str(node2.y) + ") parent =(" + str(node2.parent.x) + "," + str(node2.parent.y) + ")")
-                    # else:
-                        #     print("Alternative pruned")
-                        # prune the node from all nodes
+        # Sort once: by round, then cost (asc), then info (desc)
+        nodelist_complete.sort(key=lambda n: (n.round, n.cost, -n.info))
 
+        # Group nodes by round
+        by_round = defaultdict(list)
+        for node in nodelist_complete:
+            by_round[node.round].append(node)
 
-                        # I think it should be impossible for this node to have children already since we rewire afterwards, so let's remove this
-                        nochildren=True
-                        # for allnode in self.V:
-                        #     if allnode.parent==node1: # in this case we can't prune the node because other nodes depend on it
-                        #         nochildren=False
-                        if nochildren:
-                            # if (node1.cost == node2.cost and node1.info == node2.info and index != index2 and node1.parent == node2.parent):
-                            #     print("Double detected, now pruned")
-                            if node1 in self.V:
-                                if node1 == self.x_best:
-                                    print("[PRUNING] Best node is removed, info: " + str(
-                                        self.x_best.totalinfo))
-                                self.V.remove(node1)
-                            if node1 in self.X_soln:
-                                self.X_soln.remove(node1) #remove from solutions
+        # Parallelizable pruning logic per round
+        def prune_round(nodelist):
+            to_remove = set()
+            for i, node1 in enumerate(nodelist):
+                if node1 in to_remove:
+                    continue
+                for j in range(i + 1, len(nodelist)):
+                    node2 = nodelist[j]
+                    if node2 in to_remove:
+                        continue
+
+                    same_parent = (node1.parent == node2.parent)
+                    dominates = (
+                        (node1.cost <= node2.cost and node1.info > node2.info) or
+                        (node1.cost < node2.cost and node1.info == node2.info) or
+                        same_parent
+                    )
+                    if dominates:
+                        to_remove.add(node2)
+            return to_remove
+
+        with ThreadPoolExecutor() as executor:
+            removals = list(executor.map(prune_round, by_round.values()))
+
+        # Combine all nodes to be removed
+        to_remove = set().union(*removals)
+
+        # Use sets for fast deletion
+        V_set = set(self.V)
+        X_soln_set = set(self.X_soln)
+
+        for node in to_remove:
+            if node == self.x_best:
+                print("[PRUNING] Best node is removed, info: " + str(self.x_best.totalinfo))
+            V_set.discard(node)
+            X_soln_set.discard(node)
+
+        # Update lists
+        self.V = list(V_set)
+        self.X_soln = list(X_soln_set)
 
     # def RoundTwoAdd(self, x_new):
     def MultiRobotAdd(self, x_new): 
@@ -1130,13 +1165,20 @@ class IRrtStar:
         timestart=time.time()
         if max_dist==0:
             max_dist = self.step_len
-        dist_table = [self.get_distance_and_angle(nd,node)[0] for nd in nodelist]
-        X_near = [nodelist[ind] for ind in range(len(dist_table)) if (dist_table[ind] <= max_dist and dist_table[ind] > 0.0)]
+        X_near = []
+        for nd in nodelist:
+            if nd == node:
+                continue  # skip self
+            dist = self.get_distance_and_angle(nd, node)[0]
+            if 0.0 < dist <= max_dist:
+                X_near.append(nd)
+        # dist_table = [self.get_distance_and_angle(nd,node)[0] for nd in nodelist]
+        # X_near = [nodelist[ind] for ind in range(len(dist_table)) if (dist_table[ind] <= max_dist and dist_table[ind] > 0.0)]
         timeend = time.time()
         self.time[3] += (timeend - timestart)
         limit = 500
         if len(X_near)>limit and max_dist>=5 and reduction: # if it returns many results, we decrease the radius (when reduction is set to True)
-            X_near_reducted = self.Near(nodelist,node,max_dist-1)
+            X_near_reducted = self.Near(X_near,node,max_dist-1)
             if len(X_near_reducted)>0:
                 return X_near_reducted
             else:
@@ -1209,11 +1251,16 @@ class IRrtStar:
         return C
 
     #@staticmethod
-    def Nearest(self,nodelist, n, kd_tree):
-        # Query the nearest point (returns distance and index)
-        dist, idx = kd_tree.query((n.x, n.y))
-        return nodelist[idx]
-        #return nodelist[int(np.argmin([self.get_distance_and_angle(nd, n)[0] for nd in nodelist]))]
+    def Nearest(self,nodelist, n):
+        min_node = None
+        min_dist = float('inf')
+        for nd in nodelist:
+            dist = self.get_distance_and_angle(nd, n)[0]
+            if dist < min_dist:
+                min_dist = dist
+                min_node = nd
+        return min_node
+        # return nodelist[int(np.argmin([self.get_distance_and_angle(nd, n)[0] for nd in nodelist]))]
 
 
 
@@ -1278,8 +1325,10 @@ class IRrtStar:
 
     #@staticmethod
     def get_distance_and_angle(self,node_start, node_end):
-        distance = self.costmatrix[node_start.y*100+node_start.x,node_end.y*100+node_end.x]
-        angle = self.anglematrix[node_start.y*100+node_start.x,node_end.y*100+node_end.x]
+        idx_start = node_start.y * 100 + node_start.x
+        idx_end = node_end.y * 100 + node_end.x
+        distance = self.costmatrix[idx_start,idx_end]
+        angle = self.anglematrix[idx_start,idx_end]
 
         if not distance: # element is empty
             #print("calculating distance for entry in matrix, x = " + str(node_start.x) + ", y = " + str(
@@ -1289,10 +1338,10 @@ class IRrtStar:
             dx = node_end.x - node_start.x
             dy = node_end.y - node_start.y
             [distance,angle] = math.hypot(dx, dy), math.atan2(dy, dx)
-            self.costmatrix[node_start.y*100+node_start.x,node_end.y*100+node_end.x]=distance
-            self.costmatrix[node_end.y*100+node_end.x,node_start.y*100+node_start.x]=distance # mirror the matrix
-            self.anglematrix[node_start.y*100+node_start.x,node_end.y*100+node_end.x]=angle
-            self.anglematrix[node_end.y*100+node_end.x,node_start.y*100+node_start.x]=angle-math.pi # mirror the matrix
+            self.costmatrix[idx_start,idx_end]=distance
+            self.costmatrix[idx_end,idx_start]=distance # mirror the matrix
+            self.anglematrix[idx_start,idx_end]=angle
+            self.anglematrix[idx_end,idx_start]=angle-math.pi # mirror the matrix
             if distance > 0:
                 self.FindInfo(node_end.x,node_end.y,node_start.x,node_start.y,node_start,distance,False) # to check whether the path passes through obstacles/edges
 

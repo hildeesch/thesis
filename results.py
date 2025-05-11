@@ -284,7 +284,7 @@ def analyze_results_new(test="comparison"):
     # path = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r5_it200_1/finalpath.npy"))
     # for i in range(len(rounds)):
     #     print(path[i],rounds[i])
-    time = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r2_it100_0/computingtime.npy"))
+    time = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r2_it200_0/computingtime.npy"))
     print("Time: ", time)
     
 if __name__ == '__main__':
