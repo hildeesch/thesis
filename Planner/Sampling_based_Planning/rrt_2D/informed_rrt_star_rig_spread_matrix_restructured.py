@@ -775,23 +775,23 @@ class IRrtStar:
                 self.Recalculate(node)  # recalculates the cost and info for nodes further down the path
 
     def Recalculate_selected(self,parent):
-        for node in self.child_map.get(parent, []):            
-            dist = self.Line(parent, node)
-            node.info = parent.info + self.FindInfo(node.x, node.y, parent.x, parent.y, parent,
-                                                        dist, True)
-            node.cost = parent.cost + dist
-            self.LastPath(node)
-            if node.round>1:
-                if [node.x,node.y]==[self.x_start.x,self.x_start.y]: # start of new round
-                    node.prevroundcost=node.totalcost
-                else:
-                    node.prevroundcost=node.parent.prevroundcost
+        node = self.child_map[parent]           
+        dist = self.Line(parent, node)
+        node.info = parent.info + self.FindInfo(node.x, node.y, parent.x, parent.y, parent,
+                                                    dist, True)
+        node.cost = parent.cost + dist
+        self.LastPath(node)
+        if node.round>1:
+            if [node.x,node.y]==[self.x_start.x,self.x_start.y]: # start of new round
+                node.prevroundcost=node.totalcost
+            else:
+                node.prevroundcost=node.parent.prevroundcost
 
-            if (node not in self.X_soln) and ((node.totalcost-node.prevroundcost)<=self.budget):
-                self.X_soln.append(node)
-            # else: # only nodes in x_soln can have children
-            #     self.Recalculate(node)  # recalculates the cost and info for nodes further down the path
-            self.Recalculate(node)  # recalculates the cost and info for nodes further down the path
+        if (node not in self.X_soln) and ((node.totalcost-node.prevroundcost)<=self.budget):
+            self.X_soln.append(node)
+        # else: # only nodes in x_soln can have children
+        #     self.Recalculate(node)  # recalculates the cost and info for nodes further down the path
+        self.Recalculate_selected(node)  # recalculates the cost and info for nodes further down the path
     def Rewiring_new(self,x_new): # adapt for multi-robot
         for x_near in self.Near(self.V, x_new, self.search_radius,False):
             if x_near!=self.x_start and not x_near.parent.has_same_position(self.x_start): # not the start of the route and not the start of the next round
@@ -862,7 +862,7 @@ class IRrtStar:
         prev_copynode=None
 
         #TODO i don't understand what we do in this while loop (why add all the nodes again as solutions )
-        self.child_map = defaultdict(list)
+        self.child_map = {}
 
         while node!=self.x_start:
             #copynode = deepcopy(node) # just now
@@ -871,7 +871,7 @@ class IRrtStar:
             copynode = Node((node.x, node.y))
             if prev_copynode:
                 prev_copynode.parent=copynode
-                self.child_map[copynode].append(prev_copynode)
+                self.child_map[copynode] = prev_copynode
 
             #copynode.parent = copyparent
             copynode.info = node.info
@@ -947,7 +947,7 @@ class IRrtStar:
                     checked_locations.add((x_near.x,x_near.y))
                     x_temp = Node((node.x, node.y))
                     x_temp.parent = node.parent
-                    self.child_map[node.parent].append(x_temp)
+                    self.child_map[node.parent] = x_temp
                     x_temp.info = node.info
                     x_temp.cost = node.cost
                     x_temp.totalinfo = node.totalinfo
@@ -968,7 +968,7 @@ class IRrtStar:
 
                         newnode = Node((x_near.x, x_near.y))
                         newnode.parent = node.parent.parent
-                        self.child_map[node.parent.parent].append(newnode)
+                        self.child_map[node.parent.parent] = newnode
 
                         newnode.info = node.parent.parent.info + self.FindInfo(node.parent.parent.x,
                                                                                     node.parent.parent.y, x_near.x,
@@ -1009,7 +1009,7 @@ class IRrtStar:
                             if totalinfo>=best_node.totalinfo:
                                 # reverse rewiring
                                 node.parent = x_temp.parent
-                                self.child_map[x_temp.parent].append(node)
+                                self.child_map[x_temp.parent] = node
                                 node.info = x_temp.info
                                 node.cost = x_temp.cost
                                 node.totalinfo = x_temp.totalinfo
