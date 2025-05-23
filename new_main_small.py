@@ -206,7 +206,7 @@ def prepandtest(test="comparison"):
         scenario = [1,2,2,1]
         settings,[gaussians_nr,gaussians_size] = getSettings(scenario)
                     
-        for it in range(10):
+        for it in range(100):
             pathname = str("Result_files/small/increasing_iterations/") + str(it) + '/uncertainty_matrix.npy'
 
             if not os.path.exists(pathname):
@@ -214,6 +214,8 @@ def prepandtest(test="comparison"):
                     uncertainty_matrix = create_random_infomap(type="point",size=(20,20),source_nr=gaussians_nr)
                 else:
                     uncertainty_matrix = create_random_infomap(source_nr=gaussians_nr, size=(20,20),source_size=gaussians_size)
+                os.makedirs(str("Result_files/small/increasing_iterations/") + str(it))
+
                 np.save(pathname,uncertainty_matrix)
                 samplelocations_saved=[]
                 samplelocations_loaded=False
@@ -224,8 +226,8 @@ def prepandtest(test="comparison"):
                 samplelocations_loaded = True
 
             for budget in [round((399/100)*10),round((399/100)*25)]:
-                for robots in [2,1,5]:
-                #for robots in [1]:
+                #for robots in [5,2,1]:
+                for robots in [1]:
                     for iterations in [200,150,125,100,75,50,25]:
                         settings[1] = budget
                         settings[7] = robots
