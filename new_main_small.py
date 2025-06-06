@@ -226,8 +226,8 @@ def prepandtest(test="comparison"):
                 samplelocations_loaded = True
 
             for budget in [round((399/100)*10),round((399/100)*25)]:
-                #for robots in [5,2,1]:
-                for robots in [1]:
+                for robots in [5,2,1]:
+                # for robots in [1]:
                     for iterations in [200,150,125,100,75,50,25]:
                         settings[1] = budget
                         settings[7] = robots

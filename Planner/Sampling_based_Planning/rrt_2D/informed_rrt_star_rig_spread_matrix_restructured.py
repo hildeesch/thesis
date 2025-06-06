@@ -890,7 +890,11 @@ class IRrtStar:
             bestpath.append(copynode) # just now
             #bestpath.append(node)
             #infosteps.append(node.info-node.parent.info) # increase of info
-            infosteps.append((node.info-node.parent.info)/(node.cost-node.parent.cost)) # density of increase of info
+            costincrease = node.cost - node.parent.cost
+            if costincrease == 0:
+                infosteps.append(0)
+            else:
+                infosteps.append((node.info-node.parent.info)/(node.cost-node.parent.cost)) # density of increase of info
 
             # the infosteps contain the added info for the parent to the node (of that node)
             # tworoundstrategy2:
@@ -902,14 +906,15 @@ class IRrtStar:
 
         prev_copynode.parent=self.x_start # for the last one
         best_node=copybest_node
-
+        if node.round not in prevroundcosts: # in case round 1 == 0
+            prevroundcosts[node.round]=node.prevroundcost
         roundcosts={}
         for i in range(max(prevroundcosts)-1):
             round=i+1
             roundcosts[round] = prevroundcosts[round+1]-prevroundcosts[round]
 
         # if prevroundcosts==0 or not doubleround:
-        #     #print("Rewiring: updated first round cost")
+        #     #print("Rewiring: updated first round cost")      
         #     costfirstround=best_node.totalcost
 
 
