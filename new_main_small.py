@@ -107,6 +107,12 @@ def prepandtest(test="comparison"):
     if test=="comparison":
         scenariolist = list(product([1, 2, 3], repeat=4))
         for it in range(10):
+            pathname = str("Result_files/small/comparison/") + str(it) 
+            if not os.path.exists(pathname):
+                os.makedirs(str("Result_files/small/comparison/") + str(it))
+
+
+
             for scenario in scenariolist:
                 settings,[gaussians_nr,gaussians_size] = getSettings(scenario)
                 if gaussians_size==1:
@@ -116,7 +122,7 @@ def prepandtest(test="comparison"):
         
                 # Our method
                 informed_matrix = deepcopy(uncertainty_matrix)
-                pathname = str("Result_files/small/comparison/") + str(scenario) + str("_method_")+str(it)+str("/")
+                pathname = str("Result_files/small/comparison/")+str(it)+"/"+ str(scenario) + str("_method")+str("/")
                 if not os.path.exists(pathname):
                     os.makedirs(pathname)
                 else:
@@ -140,7 +146,7 @@ def prepandtest(test="comparison"):
                 np.save(pathname + 'totalinfomatrix.npy', np.nansum(uncertainty_matrix))
                 
                 # Uninformed method
-                pathname = str("Result_files/small/comparison/") + str(scenario) + str("_uninformed_")+str(it)+str("/")
+                pathname = str("Result_files/small/comparison/")+str(it)+"/"+ str(scenario) + str("_uninformed")+str("/")
                 if not os.path.exists(pathname):
                     os.makedirs(pathname)
                 uniform_matrix = deepcopy(uncertainty_matrix)
@@ -172,7 +178,7 @@ def prepandtest(test="comparison"):
                 
                 # Budgeted coverage
                 budget_matrix = deepcopy(uncertainty_matrix)
-                pathname = str("Result_files/small/comparison/") + str(scenario) + str("_coverage_")+str(it)+str("/")
+                pathname = str("Result_files/small/comparison/")+str(it)+"/"+ str(scenario) + str("_coverage")+str("/")
                 if not os.path.exists(pathname):
                     os.makedirs(pathname)
                 startpos=[50,0]
@@ -180,6 +186,9 @@ def prepandtest(test="comparison"):
                 [finalpath, finalinfo, finalcost] = max_coverage(budget_matrix, settings[1], startpos, settings[7],False)
                 time_end = time.process_time()
                 time_total = time_end-time_start
+                print(finalpath)
+                print(finalinfo)
+                print(finalcost)
                 print("Time taken = "+str(time_total)+" seconds. This is more than "+str(time_total//60)+" minutes")
                 animation_max_coverage(uncertainty_matrix,finalpath,finalinfo,"Coverage Method",False,pathname,(20,20))
                 np.save(pathname + 'finalinfo.npy', finalinfo)
@@ -191,13 +200,13 @@ def prepandtest(test="comparison"):
                 np.save(pathname + 'totalinfomatrix.npy', np.nansum(uncertainty_matrix))
 
                 # Total info in the map:
-                pathname = str("Result_files/small/comparison/") + str(scenario) +str("_")+str(it)+str("/") 
+                pathname = str("Result_files/small/comparison/")+str(it)+"/"+ str(scenario) +str("/") 
                 if not os.path.exists(pathname):
                     os.makedirs(pathname)
                 np.save(pathname + 'totalinfomatrix.npy', np.nansum(uncertainty_matrix))
 
                 # Overview of scenarios in text file:
-                with open("Result_files/small/comparison/scenario_overview.txt", "a") as file:
+                with open(("Result_files/small/comparison/"+str(it)+"/"+"scenario_overview.txt"), "a") as file:
                     wr_str = str(scenario)+" Budget: "+ str(settings[1])+ ", Gaussians nr: "+str( gaussians_nr)+", Gaussian size: "+ str(gaussians_size)+ ", Robots: "+ str(settings[7])+"\n"
                     file.write(wr_str)
                     print("SCENARIO \n")
@@ -427,8 +436,8 @@ def coverage():
 if __name__ == '__main__':
     #default()
     #prepandtest()
-    prepandtest("increasing_iterations")
-    #prepandtest("comparison")
+    #prepandtest("increasing_iterations")
+    prepandtest("comparison")
     #minimum_example()
     #multi_robot()
     #coverage()

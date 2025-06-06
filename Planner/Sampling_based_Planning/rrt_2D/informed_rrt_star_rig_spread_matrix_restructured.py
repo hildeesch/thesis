@@ -91,7 +91,7 @@ class IRrtStar:
             self.stopsetting="mild"
             self.multirobot=False
             self.pathname=[]
-        #self.scenario=scenario
+        self.scenario=scenario
         self.samplelocations=samplelocations
         #self.samplelocations_add=False
 
@@ -128,7 +128,7 @@ class IRrtStar:
         self.x_best = self.x_start
         self.show = False
         self.print = False
-        self.visualizationmode ="False" #steps, nosteps or False
+        self.visualizationmode ="steps" #steps, nosteps or False
         self.rewiringafter = True #TODO: why is this there? doesn't seem intuitive
         return 
 
@@ -159,7 +159,7 @@ class IRrtStar:
                     #c_best = cost[x_best]
                     i_last_best = i_best
                     self.i_best = info[x_best]
-                    if self.i_best == self.max_info: # stop if we reached all the info in the map
+                    if self.i_best == self.max_info and not self.scenario: # stop if we reached all the info in the map
                         break
 
 
@@ -301,12 +301,6 @@ class IRrtStar:
                 if self.multirobot:
                     #self.RoundTwoAdd(node_new)
                     self.MultiRobotAdd(x_new)
-                timestart = time.time()
-                self.Rewiring_new(x_new)
-                timeend= time.time()
-                self.time[4] += (timeend-timestart)
-                #print("node_new: ("+str(node_new.x)+","+str(node_new.y)+")")
-
 
                 if node_new!=[]: # so it has actually been assigned
                     # self.Pruning(node_new)
@@ -319,6 +313,27 @@ class IRrtStar:
                             plt.show()
                         else:
                             plt.close()
+                timestart = time.time()
+                self.Rewiring_new(x_new)
+                timeend= time.time()
+                self.time[4] += (timeend-timestart)
+                #print("node_new: ("+str(node_new.x)+","+str(node_new.y)+")")
+
+                if node_new!=[]: # so it has actually been assigned
+                    # self.Pruning(node_new)
+                    if self.visualizationmode=="steps" and not double: # show all connections after rewiring
+                        # self.animation(k, x_new,2)
+                        self.fig, self.ax = plt.subplots()
+                        self.animation_new(k, x_new,4)
+                        if self.pathname:
+                            plt.savefig(self.pathname + "animation_"+str(k-1)+"_4_postrewiring")
+                        if self.show:
+                            plt.show()
+                        else:
+                            plt.close()
+
+
+
             if k % 50 == 0 and not double:
                 if self.show and not self.visualizationmode:
                 #    self.animation()
@@ -1394,7 +1409,7 @@ class IRrtStar:
         """
         Improved visualization for the RIG algorithm.
         """
-        if pruningstep != 2:
+        if pruningstep != 2: # 2 = postprune
             self.ax.clear()  # Clears only the plot, keeping the figure
 
         # Set modern dark background
@@ -1405,7 +1420,7 @@ class IRrtStar:
         path_color_2 = "violet" # second round
         path_color_3 = "green" # third round (for now ) #TODO
         # Define transparency
-        opacity = 0.8 if (pruningstep == 1 or pruningstep == 2 or pruningstep == 3) else 0.2
+        opacity = 0.8 if (pruningstep == 1 or pruningstep == 2 or pruningstep == 3 or pruningstep == 4) else 0.2
 
         # Title update
         if k and pruningstep != 2:

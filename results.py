@@ -7,6 +7,9 @@ from main import getSettings
 from heatmap import show_map
 from monitortreat import updatematrix
 from monitortreat import showpathlong
+import pandas as pd
+import matplotlib as plt 
+import seaborn as sns
 
 def visualize_results():
     scenariolist = [[1, 1], [1, 2], [1, 3], [1, 4], [1, 5], [1, 6], [1, 7], [1, 8],
@@ -261,6 +264,8 @@ def analyze_results_new(test="comparison"):
                     print("Totalinfo: ", uncertainty_matrix_sum,)
                     print("") #whiteline between scenarios
     elif test == "increasing_iterations_small":
+        results = []
+        # ---------- LOAD DATA ----------
         scenario = [1,2,2,1]                            
         for it in range(1,100):
             for budget in [round((399/100)*10),round((399/100)*25)]:
@@ -271,15 +276,59 @@ def analyze_results_new(test="comparison"):
                         finalinfo = np.load(pathname + 'finalinfo.npy')
                         finalcost = np.load(pathname + 'finalcosts.npy')
                         time_total = np.load(pathname + 'computingtime.npy')
+                        totalinfo = np.load(pathname + 'totalinfomatrix.npy')
                         print("it: ",iterations," Info: ", finalinfo, " Cost: ",finalcost, " Time: ",time_total)
 
                         path = np.load(pathname + "finalpath.npy")
+
+                        
+                        results.append({
+                            "budget": budget,
+                            "robots": robots,
+                            "iterations": iterations,
+                            "finalinfo": finalinfo,
+                            "finalcost": finalcost,
+                            "time_total": time_total,
+                            "normalized_info": (finalinfo / totalinfo)
+                        })
                         #print(path)
 
                     # Total info in the map:
                     uncertainty_matrix_sum = np.load(pathname + 'totalinfomatrix.npy')    
                     print("Totalinfo: ", uncertainty_matrix_sum,)
                     print("") #whiteline between scenarios
+
+        # ---------- CREATE DATAFRAME ----------
+        df = pd.DataFrame(results)
+
+        # Convert numerical budget back to percentages (optional)
+        df["budget_percent"] = df["budget"] / 399 * 100
+
+        # ---------- PLOTTING ----------
+        sns.set(style="whitegrid")
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
+
+        for ax, budget_level in zip(axes, [10, 25]):
+            df_budget = df[df["budget_percent"] == budget_level]
+
+            for robot_count in sorted(df_budget["robots"].unique()):
+                sub = df_budget[df_budget["robots"] == robot_count]
+                grouped = sub.groupby("iterations")["normalized_info"]
+                means = grouped.mean()
+                stds = grouped.std()
+
+                ax.plot(means.index, means.values, label=f"{robot_count} robots")
+                ax.fill_between(means.index, means - stds, means + stds, alpha=0.2)
+
+            ax.set_title(f"Budget = {budget_level}%")
+            ax.set_xlabel("Iterations")
+            ax.set_ylabel("Normalized Info Gain")
+            ax.legend()
+            ax.set_ylim(0, 1)
+
+        plt.suptitle("Normalized Info Gain vs Iterations", fontsize=16)
+        plt.tight_layout()
+        plt.show()
     rounds = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r5_it200_1/rounds.npy"))
     path = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r5_it200_1/finalpath.npy"))
     for i in range(len(rounds)):

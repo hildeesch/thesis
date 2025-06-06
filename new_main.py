@@ -364,16 +364,17 @@ def minimum_example():
 def multi_robot(): # NOT FUNCTIONAL YET AT ALL
     total_robots=3
     #uncertainty_matrix = create_random_infomap(type="point",source_nr=30)
-    uncertainty_matrix = create_random_infomap(type="fixed",source_nr=30)
+    #uncertainty_matrix = create_random_infomap(type="fixed",source_nr=30)
+    uncertainty_matrix = create_random_infomap()
     default_scenario = getDefaultSettings(stopsetting="mild",step_len=30,budget=400, multirobot=total_robots)
-    pathname = [] # empty pathname
-    #pathname = str("Figures/Savefolder/")
+    #pathname = [] # empty pathname
+    pathname = str("Figures/Savefolder/")
     default_scenario.append(pathname) # such that files can also be saved within the algorithm
 
     # for day in range(1,total_robots+1):
         
     [path, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
-                            matrices,samplelocations] = rig_matrix(uncertainty_matrix,default_scenario)
+                            matrices,samplelocations] = rig_matrix(uncertainty_matrix,default_scenario, iterations=250)
     finalpath=path[0]
     rounds=path[1]
     animation_max_coverage(uncertainty_matrix,finalpath,finalinfo,"Proposed Method",True,rounds)
@@ -393,9 +394,9 @@ def coverage():
 if __name__ == '__main__':
     #default()
     #prepandtest()
-    prepandtest("increasing_iterations")
+    #prepandtest("increasing_iterations")
     #minimum_example()
-    #multi_robot()
+    multi_robot()
     #coverage()
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/

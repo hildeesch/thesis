@@ -283,10 +283,10 @@ def animation_max_coverage(info_map, best_path, best_info, title="Max Coverage w
                 ax.plot(
                     [x[i],x[i+1]], [y[i],y[i+1]], color=colors[c], linewidth=linewidth, alpha=0.8
                 )
-
-    ax.plot(
-        [x[-1],startpos[0]], [y[-1],startpos[1]], color=colors[c], linewidth=linewidth, alpha=0.8
-    )
+    if len(x)>0: # a path exists
+        ax.plot(
+            [x[-1],startpos[0]], [y[-1],startpos[1]], color=colors[c], linewidth=linewidth, alpha=0.8
+        )
     #ax.set_prop_cycle(color=color_list)         
     # ax.plot(
     #     x, y, linewidth=0.5, alpha=0.8, label="Coverage Path"
