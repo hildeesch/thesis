@@ -8,7 +8,8 @@ from heatmap import show_map
 from monitortreat import updatematrix
 from monitortreat import showpathlong
 import pandas as pd
-import matplotlib as plt 
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 import seaborn as sns
 
 def visualize_results():
@@ -207,8 +208,73 @@ def analyze_results():
 
 
 from itertools import product
+def load_comparison_results(base_path="Result_files/small/comparison/", n_iterations=20):
+    all_data = []
+    methods = ['_method', '_uninformed', '_coverage']
+    scenario_combinations = list(product([1, 2, 3], repeat=4))  # 81 combinations
+
+    # for it in range(n_iterations):
+    i=1
+    for it in [2,5,6,8,9,12,13,15,16,17]:
+        for scenario in scenario_combinations:
+            for method in methods:
+                scenario_path = os.path.join(base_path, str(it), str(scenario) + method)
+                try:
+                    finalinfo = np.load(os.path.join(scenario_path, 'finalinfo.npy')).item()
+                    finalcost = np.load(os.path.join(scenario_path, 'finalcosts.npy')).item()
+                    time_total = np.load(os.path.join(scenario_path, 'computingtime.npy')).item()
+                    totalinfo = np.load(os.path.join(scenario_path, 'totalinfomatrix.npy')).item()
+                except FileNotFoundError:
+                    print(i, " File not found for scenario: ", scenario_path)
+                    i+=1
+                    continue  # Incomplete run
+
+                # Decode scenario params
+                budget_map = {1: 10, 2: 15, 3: 25}
+                gauss_nr_map = {1: 1, 2: 3, 3: 10}
+                gauss_size_map = {1: 1, 2: 2, 3: 5}
+                robot_map = {1: 1, 2: 2, 3: 5}
+
+                budget = budget_map[scenario[0]]
+                gauss_nr = gauss_nr_map[scenario[1]]
+                gauss_size = gauss_size_map[scenario[2]]
+                robots = robot_map[scenario[3]]
+
+                all_data.append({
+                    "iteration": it,
+                    "method": method.strip('_'),
+                    "budget_percent": budget,
+                    "gaussians_nr": gauss_nr,
+                    "gaussians_size": gauss_size,
+                    "robots": robots,
+                    "finalinfo": finalinfo,
+                    "finalcost": finalcost,
+                    "normalized_info": finalinfo / totalinfo if totalinfo > 0 else np.nan,
+                    "normalized_cost": (finalcost / ((399/100)*budget*robots)),
+                    "runtime_sec": time_total
+                })
+
+    df = pd.DataFrame(all_data)
+    return df
 
 def analyze_results_new(test="comparison"):
+    # Optional: Use a cleaner font and style
+    plt.style.use("seaborn-v0_8-whitegrid")
+    mpl.rcParams.update({
+        "font.family": "sans-serif",
+        "font.size": 12,
+        "axes.titlesize": 14,
+        "axes.labelsize": 12,
+        "legend.fontsize": 10,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 10,
+        "lines.linewidth": 2,
+        "lines.markersize": 6,
+    })
+    # Color palette
+    palette = sns.color_palette("deep")
+
+
     if test=="comparison":
         scenariolist = list(product([1, 2, 3], repeat=4))
         for it in range(10):
@@ -263,13 +329,68 @@ def analyze_results_new(test="comparison"):
                     uncertainty_matrix_sum = np.load(pathname + 'totalinfomatrix.npy')    
                     print("Totalinfo: ", uncertainty_matrix_sum,)
                     print("") #whiteline between scenarios
+    elif test == "comparison_small":
+        analysis_options = {0:"avg",1:"scenario",2:"top"}
+        analysis = analysis_options[1]
+        print("Analysis style: ", analysis)
+        df = load_comparison_results()
+        # Average performance per method over all scenarios
+        if analysis=="avg":
+            analysis_outcome = df.groupby('method')[['normalized_info', 'finalcost', 'runtime_sec']].describe()
+            print(analysis_outcome)
+
+        # Or by scenario configuration
+        if analysis=="scenario":
+            # Pivot table to show methods side-by-side
+            # Normal sort
+            #pivot = df.groupby(['budget_percent', 'gaussians_nr', 'gaussians_size', 'robots', 'method'])['normalized_info'].mean().unstack('method')
+            # Sort by robot nr first
+            pivot = df.groupby(['robots','budget_percent', 'gaussians_nr', 'gaussians_size', 'method'])['normalized_info'].mean().unstack('method')
+
+            # Determine best method per scenario
+            pivot['best_method'] = pivot.apply(determine_best_method, axis=1)
+
+            # Reset index to convert MultiIndex to columns
+            analysis_outcome = pivot.reset_index()
+
+            # --- Run and append per-scenario ANOVA results ---
+            analysis_outcome = add_per_scenario_anova(df, analysis_outcome)
+
+
+            print(analysis_outcome.to_markdown(index=False))
+            # analysis_outcome = df.groupby(['method', 'budget_percent', 'gaussians_nr', 'gaussians_size', 'robots'])['normalized_info'].mean().unstack(level=0)
+            # print(analysis_outcome.to_markdown())
+
+            # Count best_method values (excluding ties)
+            # Assuming ties contain '+' or are not exact matches to a single method name
+            individual_wins = analysis_outcome[
+                ~analysis_outcome['best_method'].str.contains(r'\+', na=False)
+            ]['best_method'].value_counts()
+
+            # Print summary
+            print("\nBest method counts (ties excluded):")
+            print(individual_wins.to_string())
+
+
+        # Visualizing top scenarios:
+        if analysis=="top":
+            top = df.groupby(['method', 'budget_percent', 'gaussians_nr', 'gaussians_size', 'robots']) \
+            ['normalized_info'].mean().reset_index().sort_values("normalized_info", ascending=False)
+            print(top)
+            sns.barplot(data=top.head(10), x="normalized_info", y="method", hue="robots")
+            plt.title("Top 10 Configurations by Normalized Info")
+            plt.tight_layout()
+            plt.show()
+
+
     elif test == "increasing_iterations_small":
         results = []
         # ---------- LOAD DATA ----------
         scenario = [1,2,2,1]                            
-        for it in range(1,100):
+        for it in range(0,40):
             for budget in [round((399/100)*10),round((399/100)*25)]:
                 for robots in [1,2,5]:
+                    print("Iteration: ", it)
                     print("Scenario - Budget: ",budget," Robots: ",robots)
                     for iterations in [200,150,125,100,75,50,25]:
                         pathname = str("Result_files/small/increasing_iterations/") +str(it)+"/"+ str(scenario) + str("_method_b")+str(budget)+"_r"+str(robots)+"_"+str(iterations)+str("/")
@@ -287,8 +408,9 @@ def analyze_results_new(test="comparison"):
                             "robots": robots,
                             "iterations": iterations,
                             "finalinfo": finalinfo,
-                            "finalcost": finalcost,
-                            "time_total": time_total,
+                            "finalcost": float(finalcost.item()),
+                            "normalized_cost": (finalcost / (budget*robots)),
+                            "time_total": float(time_total.item()),
                             "normalized_info": (finalinfo / totalinfo)
                         })
                         #print(path)
@@ -307,37 +429,165 @@ def analyze_results_new(test="comparison"):
         # ---------- PLOTTING ----------
         sns.set(style="whitegrid")
         fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
-
+        y_metric = "normalized_info"
+        # y_metric = "normalized_cost"
+        # y_metric = "time_total"
         for ax, budget_level in zip(axes, [10, 25]):
-            df_budget = df[df["budget_percent"] == budget_level]
+            df_budget = df[round(df["budget_percent"]) == budget_level] # filter by budget level
 
-            for robot_count in sorted(df_budget["robots"].unique()):
+            # Lines:
+            # for robot_count in sorted(df_budget["robots"].unique()):
+            #     sub = df_budget[df_budget["robots"] == robot_count]
+            #     grouped = sub.groupby("iterations")[y_metric]
+            #     means = grouped.mean()
+            #     stds = grouped.std()
+
+            #     ax.plot(means.index, means.values, label=f"{robot_count} robots")
+            #     ax.fill_between(means.index, means - stds, means + stds, alpha=0.2)
+
+            # Points: 
+            for idx, robot_count in enumerate(sorted(df_budget["robots"].unique())):
+
                 sub = df_budget[df_budget["robots"] == robot_count]
-                grouped = sub.groupby("iterations")["normalized_info"]
-                means = grouped.mean()
-                stds = grouped.std()
+                means = sub.groupby("iterations")[y_metric].mean()
+                stds = sub.groupby("iterations")[y_metric].std()
 
-                ax.plot(means.index, means.values, label=f"{robot_count} robots")
-                ax.fill_between(means.index, means - stds, means + stds, alpha=0.2)
+                ax.errorbar(
+                    means.index,
+                    means,
+                    yerr=stds,
+                    label=f"{robot_count} robots",
+                    marker='o',           # shows points
+                    capsize=4,            # small horizontal line at top of error bar
+                    linestyle='-',        # optional: line connecting the points
+                    elinewidth=1.5,        # width of error bar lines
+                    color=palette[idx]
+                )
+                ax.fill_between(means.index, means - stds, means + stds, alpha=0.2, color=palette[idx])
 
-            ax.set_title(f"Budget = {budget_level}%")
+            ax.set_title(f"Budget {budget_level}%")
             ax.set_xlabel("Iterations")
-            ax.set_ylabel("Normalized Info Gain")
-            ax.legend()
-            ax.set_ylim(0, 1)
+            ax.grid(True)
+            #ax.legend(title="Robots")
+            if y_metric != "time_total":
+                ax.set_ylabel(y_metric.replace("_", " ").capitalize())
+                ax.set_ylim(0, 1)
+            else:
+                ax.set_ylabel("Time (s)")
+            ax.legend(title="Robots", frameon=True)
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
 
-        plt.suptitle("Normalized Info Gain vs Iterations", fontsize=16)
+        if y_metric=="normalized_info":
+            fig.suptitle("Performance over Iterations", fontsize=16, weight="bold")
+        elif y_metric == "normalized_cost":
+            fig.suptitle("Path Costs over Iterations", fontsize=16, weight="bold")
+        elif y_metric=="time_total":
+            fig.suptitle("Computing Time over Iterations", fontsize=16, weight="bold")
+        else:
+            fig.suptitle("??? over Iterations", fontsize=16, weight="bold")
         plt.tight_layout()
         plt.show()
-    rounds = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r5_it200_1/rounds.npy"))
-    path = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r5_it200_1/finalpath.npy"))
-    for i in range(len(rounds)):
-        print(path[i],rounds[i])
-    time = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r2_it200_0/computingtime.npy"))
-    print("Time: ", time)
-    
+
+    # Reading out results of one case
+    # rounds = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r5_it200_1/rounds.npy"))
+    # path = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r5_it200_1/finalpath.npy"))
+    # for i in range(len(rounds)):
+    #     print(path[i],rounds[i])
+    # time = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r2_it200_0/computingtime.npy"))
+    # print("Time: ", time)
+
+from scipy.stats import f_oneway
+
+def add_per_scenario_anova(df, scenario_df, scenario_columns=['robots','budget_percent', 'gaussians_nr', 'gaussians_size']):
+    """
+    Performs one-way ANOVA per scenario and appends results (p-value, significance) to scenario_df.
+    """
+    pvals = []
+    significance = []
+
+    for _, row in scenario_df.iterrows():
+        # Extract scenario values
+        scenario_values = {col: row[col] for col in scenario_columns}
+
+        # Subset original data to match scenario
+        mask = (df[scenario_columns] == pd.Series(scenario_values)).all(axis=1)
+        group = df[mask]
+
+        # Group normalized_info by method
+        grouped = group.groupby("method")["normalized_info"].apply(list)
+
+        # Only proceed if at least 2 methods have values
+        if grouped.count() < 2:
+            pvals.append(np.nan)
+            significance.append(False)
+            continue
+
+        try:
+            f_stat, p_val = f_oneway(*grouped)
+            pvals.append(p_val)
+            significance.append(p_val < 0.05)
+        except Exception:
+            pvals.append(np.nan)
+            significance.append(False)
+
+    scenario_df['anova_pvalue'] = pvals
+    scenario_df['significant'] = significance
+    return scenario_df
+
+# Function to determine best method, handling ties
+def determine_best_method(row):
+    max_val = row.max()
+    best_methods = row[row == max_val].index.tolist()
+    if len(best_methods) == 1:
+        return best_methods[0]
+    else:
+        return '+'.join(best_methods)  # or return 'tie' or None if preferred
+
+def recompute_uninformed_finalinfo(base_path="Result_files/small/comparison", iterations=range(1, 20)):
+    scenariolist = list(product([1, 2, 3], repeat=4))
+
+    for it in iterations:
+        for scenario in scenariolist:
+            scenario_str = str(scenario)
+            scenario_basepath = os.path.join(base_path, str(it), scenario_str)
+
+            if os.path.exists(scenario_basepath):
+                print(scenario_basepath)
+                uncertainty_path = os.path.join(scenario_basepath, 'uncertainty_matrix.npy')
+                uninformed_path = os.path.join(base_path, str(it), scenario_str + "_uninformed")
+
+                # Paths for existing files
+                infopath_file = os.path.join(uninformed_path, 'infopath.npy')
+                finalinfo_file = os.path.join(uninformed_path, 'finalinfo.npy')
+
+                # Check required files exist
+                if not (os.path.exists(uncertainty_path) and os.path.exists(infopath_file)):
+                    print("Required files do not exist: ", uncertainty_path)
+                    continue
+
+                finalinfo_prev = np.load(finalinfo_file).item()
+                # Load files
+                uncertainty_matrix = np.load(uncertainty_path)
+                infopath = np.load(infopath_file, allow_pickle=True)
+
+                # Recalculate finalinfo
+                nodelist = []
+                finalinfo = 0
+                for gridpoint in infopath:
+                    if tuple(gridpoint) not in nodelist:
+                        finalinfo += uncertainty_matrix[gridpoint[1], gridpoint[0]]
+                        nodelist.append(tuple(gridpoint))
+
+                # Save corrected finalinfo
+                np.save(finalinfo_file, finalinfo)
+                print(f"Updated finalinfo for {uninformed_path} = {finalinfo:.2f} instead of {finalinfo_prev:.2f}")
+
+
 if __name__ == '__main__':
     #analyze_results()
     # visualize_results()
     #analyze_results_new()
-    analyze_results_new("increasing_iterations_small")
+    #analyze_results_new("increasing_iterations_small")
+    analyze_results_new("comparison_small")
+    #recompute_uninformed_finalinfo(iterations=[2,5,8,12,16])

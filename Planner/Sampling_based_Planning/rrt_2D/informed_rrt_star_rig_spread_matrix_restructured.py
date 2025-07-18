@@ -128,7 +128,7 @@ class IRrtStar:
         self.x_best = self.x_start
         self.show = False
         self.print = False
-        self.visualizationmode ="steps" #steps, nosteps or False
+        self.visualizationmode ="False" #steps, nosteps or False
         self.rewiringafter = True #TODO: why is this there? doesn't seem intuitive
         return 
 

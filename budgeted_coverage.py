@@ -167,21 +167,22 @@ def addTravelInfo(map,coords,info):
         t += dt
 
     distance_end = math.dist(coords[-1],coords[-2])
-    dt = 1 / (2 * distance_end)
-    t = 0
-    while t < 1.0:
-        xline = coords[-2][0] - coords[-1][0]
-        yline = coords[-2][1] - coords[-1][1]
-        xpoint = round(coords[-1][0] + t * xline)
-        ypoint = round(coords[-1][1] + t * yline)
-        if not [xpoint,ypoint] in infopath and not [xpoint,ypoint] in coords:
-            infopath.append([xpoint,ypoint])
-            info+= map[ypoint][xpoint]
-        t += dt
+    if distance_end>0:
+        dt = 1 / (2 * distance_end)
+        t = 0
+        while t < 1.0:
+            xline = coords[-2][0] - coords[-1][0]
+            yline = coords[-2][1] - coords[-1][1]
+            xpoint = round(coords[-1][0] + t * xline)
+            ypoint = round(coords[-1][1] + t * yline)
+            if not [xpoint,ypoint] in infopath and not [xpoint,ypoint] in coords:
+                infopath.append([xpoint,ypoint])
+                info+= map[ypoint][xpoint]
+            t += dt
     return info, infopath
 
 
-def animation_max_coverage(info_map, best_path, best_info, title="Max Coverage with Information Map",show=True,pathname=None,rounds=None,size=(100,100)):
+def animation_max_coverage(info_map, best_path, best_info, title="Max Coverage with Information Map",show=True,pathname=None,rounds=[],size=(100,100)):
     """
     Visualizes the max coverage path over the given information map.
     
@@ -251,7 +252,7 @@ def animation_max_coverage(info_map, best_path, best_info, title="Max Coverage w
     color_list = []
     c=0
     linewidth = 0.5/(size[0]/100)
-    if not rounds:
+    if len(rounds)==0: # rounds = None
         for i in range(len(x)-1):
             color_list.append(colors[c])
             if i>0 and ([x[i],y[i]] == startpos and not [x[i-1],y[i-1]]==startpos):

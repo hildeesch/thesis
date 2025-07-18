@@ -106,7 +106,8 @@ from itertools import product
 def prepandtest(test="comparison"):
     if test=="comparison":
         scenariolist = list(product([1, 2, 3], repeat=4))
-        for it in range(10):
+        # for it in range(2,20):
+        for it in [2,5,6,8,9,12,13,15,16,17]:
             pathname = str("Result_files/small/comparison/") + str(it) 
             if not os.path.exists(pathname):
                 os.makedirs(str("Result_files/small/comparison/") + str(it))
@@ -115,95 +116,129 @@ def prepandtest(test="comparison"):
 
             for scenario in scenariolist:
                 settings,[gaussians_nr,gaussians_size] = getSettings(scenario)
-                if gaussians_size==1:
-                    uncertainty_matrix = create_random_infomap(type="point",size=(20,20),source_nr=gaussians_nr)
+                # Total info in the map:
+                scenario_basepath = str("Result_files/small/comparison/")+str(it)+"/"+ str(scenario) +str("/") 
+                uncertainty_map_path = os.path.join(scenario_basepath, 'uncertainty_matrix.npy')
+
+                if os.path.exists(uncertainty_map_path):
+                    uncertainty_matrix = np.load(uncertainty_map_path)
                 else:
-                    uncertainty_matrix = create_random_infomap(source_nr=gaussians_nr,size=(20,20), source_size=gaussians_size)
+                    if gaussians_size==1:
+                        uncertainty_matrix = create_random_infomap(type="point",size=(20,20),source_nr=gaussians_nr)
+                    else:
+                        uncertainty_matrix = create_random_infomap(source_nr=gaussians_nr,size=(20,20), source_size=gaussians_size)
+                    # Ensure base path exists and save the matrix
+                    os.makedirs(scenario_basepath, exist_ok=True)
+                    np.save(uncertainty_map_path, uncertainty_matrix)
+                    np.save(scenario_basepath + 'totalinfomatrix.npy', np.nansum(uncertainty_matrix))
         
                 # Our method
                 informed_matrix = deepcopy(uncertainty_matrix)
                 pathname = str("Result_files/small/comparison/")+str(it)+"/"+ str(scenario) + str("_method")+str("/")
                 if not os.path.exists(pathname):
                     os.makedirs(pathname)
-                else:
-                    continue # skip to the next scenario if we had this one already
-                time_start=time.process_time()
-                [path, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
-                                    matrices,samplelocations_saved] = rig_matrix(uncertaintymatrix=informed_matrix,scenario=settings,iterations=250,samplelocations=[])
-                finalpath=path[0]
-                rounds=path[1]
-                time_end = time.process_time()
-                time_total = time_end-time_start
-                print("Time taken = "+str(time_total)+" seconds. This is more than "+str(time_total//60)+" minutes")
-                animation_max_coverage(uncertainty_matrix,finalpath,finalinfo,"Proposed Method",False,pathname,rounds,(20,20))
-                np.save(pathname + 'finalinfo.npy', finalinfo)
-                np.save(pathname + 'finalcosts.npy', finalcost)
-                np.save(pathname + 'computingtime.npy', time_total)
+                    time_start=time.process_time()
+                    [path, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
+                                        matrices,samplelocations_saved] = rig_matrix(uncertaintymatrix=informed_matrix,scenario=settings,iterations=200,samplelocations=[])
+                    np.save(scenario_basepath + 'samplelocations_saved.npy', samplelocations_saved)
+                    finalpath=path[0]
+                    rounds=path[1]
+                    time_end = time.process_time()
+                    time_total = time_end-time_start
+                    print("Time taken = "+str(time_total)+" seconds. This is more than "+str(time_total//60)+" minutes")
+                    animation_max_coverage(uncertainty_matrix,finalpath,finalinfo,"Proposed Method",False,pathname,rounds,(20,20))
+                    np.save(pathname + 'finalinfo.npy', finalinfo)
+                    np.save(pathname + 'finalcosts.npy', finalcost)
+                    np.save(pathname + 'computingtime.npy', time_total)
 
-                np.save(pathname + 'finalpath.npy', finalpath) # to change viz if needed
-                np.save(pathname + 'rounds.npy', rounds) # to change viz if needed
-                np.save(pathname + 'infopath.npy', infopath) # to change viz if needed
-                np.save(pathname + 'totalinfomatrix.npy', np.nansum(uncertainty_matrix))
+                    np.save(pathname + 'finalpath.npy', finalpath) # to change viz if needed
+                    np.save(pathname + 'rounds.npy', rounds) # to change viz if needed
+                    np.save(pathname + 'infopath.npy', infopath) # to change viz if needed
+                    np.save(pathname + 'totalinfomatrix.npy', np.nansum(uncertainty_matrix))
+
+                # else skip to next method
                 
                 # Uninformed method
                 pathname = str("Result_files/small/comparison/")+str(it)+"/"+ str(scenario) + str("_uninformed")+str("/")
-                if not os.path.exists(pathname):
+                samplelocations_path = os.path.join(scenario_basepath, 'samplelocations_saved.npy')
+                if not os.path.exists(pathname) and os.path.exists(samplelocations_path):
+                    samplelocations_saved = np.load(samplelocations_path, allow_pickle=True)
                     os.makedirs(pathname)
-                uniform_matrix = deepcopy(uncertainty_matrix)
-                uniform_matrix[uniform_matrix >= 0.0] = 0.001
-                time_start=time.process_time()
-                #[path, infopath, finalcost, uninf_finalinfo, budget, steplength, searchradius, iteration,
-                #                    matrices,samplelocations] = rig_matrix(uniform_matrix,settings)
-                [path, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
-                                    matrices,samplelocations] = rig_matrix(uncertaintymatrix=uniform_matrix,scenario=settings,samplelocations=samplelocations_saved,iterations=250)
-                finalpath=path[0]
-                rounds=path[1]
-                nodelist = []
-                finalinfo = 0
-                for gridpoint in infopath:
-                    if gridpoint not in nodelist:
-                        finalinfo += uncertainty_matrix[gridpoint[1],gridpoint[0]]
-                time_end = time.process_time()
-                time_total = time_end-time_start
-                print("Time taken = "+str(time_total)+" seconds. This is more than "+str(time_total//60)+" minutes")
-                animation_max_coverage(uncertainty_matrix,finalpath,finalinfo,"Uninformed Method",False,pathname,rounds, (20,20))
-                np.save(pathname + 'finalinfo.npy', finalinfo)
-                np.save(pathname + 'finalcosts.npy', finalcost)
-                np.save(pathname + 'computingtime.npy', time_total)
+                    uniform_matrix = deepcopy(uncertainty_matrix)
+                    uniform_matrix[uniform_matrix >= 0.0] = 0.001
+                    time_start=time.process_time()
 
-                np.save(pathname + 'finalpath.npy', finalpath) # to change viz if needed
-                np.save(pathname + 'rounds.npy', rounds) # to change viz if needed
-                np.save(pathname + 'infopath.npy', infopath) # to change viz if needed
-                np.save(pathname + 'totalinfomatrix.npy', np.nansum(uncertainty_matrix))
-                
+                    # Define a reusable key based on robot count and budget
+                    reuse_key = f"robots{settings[7]}_budget{settings[1]}"
+                    reuse_dir = str("Result_files/small/comparison/")+str(it)+str("uninformed_cache/")
+                    reuse_file = os.path.join(reuse_dir, f"{reuse_key}.npz")
+                    #[path, infopath, finalcost, uninf_finalinfo, budget, steplength, searchradius, iteration,
+                    #                    matrices,samplelocations] = rig_matrix(uniform_matrix,settings)
+                    if not os.path.exists(reuse_file):
+                    # No cached version, run and save
+                        [path, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
+                                            matrices,samplelocations] = rig_matrix(uncertaintymatrix=uniform_matrix,scenario=settings,samplelocations=samplelocations_saved,iterations=200)
+                        finalpath=path[0]
+                        rounds=path[1]
+                    
+                        # Save reusable data
+                        if not os.path.exists(reuse_dir):
+                            os.makedirs(reuse_dir)
+                        time_end = time.process_time()
+                        time_total = time_end-time_start
+                        np.savez(reuse_file, path=finalpath, infopath=infopath, finalcost=finalcost, rounds=rounds, time_total=time_total)
+
+                    else:
+                        # Load cached path
+                        print(f"Loading cached uninformed path from {reuse_file}")
+                        data = np.load(reuse_file, allow_pickle=True)
+                        finalpath = data['path']
+                        infopath = data['infopath'].tolist()
+                        finalcost = data['finalcost']
+                        rounds = data['rounds']
+                        time_total = data['time_total']
+
+                    
+                    nodelist = []
+                    finalinfo = 0
+                    for gridpoint in infopath:
+                        if gridpoint not in nodelist:
+                            finalinfo += uncertainty_matrix[gridpoint[1],gridpoint[0]]
+                            nodelist.append(gridpoint)
+
+                    print("Time taken = "+str(time_total)+" seconds. This is more than "+str(time_total//60)+" minutes")
+                    animation_max_coverage(uncertainty_matrix,finalpath,finalinfo,"Uninformed Method",False,pathname,rounds, (20,20))
+                    np.save(pathname + 'finalinfo.npy', finalinfo)
+                    np.save(pathname + 'finalcosts.npy', finalcost)
+                    np.save(pathname + 'computingtime.npy', time_total)
+
+                    np.save(pathname + 'finalpath.npy', finalpath) # to change viz if needed
+                    np.save(pathname + 'rounds.npy', rounds) # to change viz if needed
+                    np.save(pathname + 'infopath.npy', infopath) # to change viz if needed
+                    np.save(pathname + 'totalinfomatrix.npy', np.nansum(uncertainty_matrix))
+                    
                 # Budgeted coverage
                 budget_matrix = deepcopy(uncertainty_matrix)
                 pathname = str("Result_files/small/comparison/")+str(it)+"/"+ str(scenario) + str("_coverage")+str("/")
                 if not os.path.exists(pathname):
                     os.makedirs(pathname)
-                startpos=[50,0]
-                time_start=time.process_time()
-                [finalpath, finalinfo, finalcost] = max_coverage(budget_matrix, settings[1], startpos, settings[7],False)
-                time_end = time.process_time()
-                time_total = time_end-time_start
-                print(finalpath)
-                print(finalinfo)
-                print(finalcost)
-                print("Time taken = "+str(time_total)+" seconds. This is more than "+str(time_total//60)+" minutes")
-                animation_max_coverage(uncertainty_matrix,finalpath,finalinfo,"Coverage Method",False,pathname,(20,20))
-                np.save(pathname + 'finalinfo.npy', finalinfo)
-                np.save(pathname + 'finalcosts.npy', finalcost)
-                np.save(pathname + 'computingtime.npy', time_total)
-                   
-                np.save(pathname + 'finalpath.npy', finalpath) # to change viz if needed
-                np.save(pathname + 'infopath.npy', infopath) # to change viz if needed
-                np.save(pathname + 'totalinfomatrix.npy', np.nansum(uncertainty_matrix))
-
-                # Total info in the map:
-                pathname = str("Result_files/small/comparison/")+str(it)+"/"+ str(scenario) +str("/") 
-                if not os.path.exists(pathname):
-                    os.makedirs(pathname)
-                np.save(pathname + 'totalinfomatrix.npy', np.nansum(uncertainty_matrix))
+                    startpos=[50,40]
+                    time_start=time.process_time()
+                    [finalpath, finalinfo, finalcost] = max_coverage(budget_matrix, settings[1], startpos, settings[7],False)
+                    time_end = time.process_time()
+                    time_total = time_end-time_start
+                    print(finalpath)
+                    print(finalinfo)
+                    print(finalcost)
+                    print("Time taken = "+str(time_total)+" seconds. This is more than "+str(time_total//60)+" minutes")
+                    animation_max_coverage(uncertainty_matrix,finalpath,finalinfo,"Coverage Method",False,pathname,[],(20,20))
+                    np.save(pathname + 'finalinfo.npy', finalinfo)
+                    np.save(pathname + 'finalcosts.npy', finalcost)
+                    np.save(pathname + 'computingtime.npy', time_total)
+                    
+                    np.save(pathname + 'finalpath.npy', finalpath) # to change viz if needed
+                    #np.save(pathname + 'infopath.npy', infopath) # to change viz if needed
+                    np.save(pathname + 'totalinfomatrix.npy', np.nansum(uncertainty_matrix))
 
                 # Overview of scenarios in text file:
                 with open(("Result_files/small/comparison/"+str(it)+"/"+"scenario_overview.txt"), "a") as file:
@@ -215,7 +250,7 @@ def prepandtest(test="comparison"):
         scenario = [1,2,2,1]
         settings,[gaussians_nr,gaussians_size] = getSettings(scenario)
                     
-        for it in range(100):
+        for it in range(41):
             pathname = str("Result_files/small/increasing_iterations/") + str(it) + '/uncertainty_matrix.npy'
 
             if not os.path.exists(pathname):
@@ -248,6 +283,7 @@ def prepandtest(test="comparison"):
                             os.makedirs(pathname)
                         else:
                             continue # skip to the next scenario if we had this one already
+                        print(pathname)
                         time_start=time.process_time()
                         [path, infopath, finalcost, finalinfo, budget, steplength, searchradius, iteration,
                                             matrices,samplelocations] = rig_matrix(uncertaintymatrix=informed_matrix,scenario=settings,samplelocations=samplelocations_saved, iterations=iterations)
