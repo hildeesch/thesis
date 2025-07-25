@@ -126,9 +126,11 @@ def max_coverage(map,budget,startpos,multirobot=1,show=True):
                     if np.max(translated_coords)>map.shape[1]: # if it goes outside of the map, skip it
                         continue 
                     info=0
+                    added_coords=[] # prevent doubles
                     for [x_coord,y_coord] in translated_coords:
-                        if x_coord in range(map.shape[0]) and y_coord in range(map.shape[1]):
+                        if x_coord in range(map.shape[0]) and y_coord in range(map.shape[1]) and [x_coord,y_coord] not in added_coords:
                             info+= map[y_coord][x_coord]
+                            added_coords.append([x_coord,y_coord])
                     if [x,y]!=startpos:
                         info,travel_coords = addTravelInfo(map,translated_coords,info)
                     if info>best_info:

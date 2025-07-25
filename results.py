@@ -210,11 +210,12 @@ def analyze_results():
 from itertools import product
 def load_comparison_results(base_path="Result_files/small/comparison/", n_iterations=20):
     all_data = []
-    methods = ['_method', '_uninformed', '_coverage']
+    methods = ['_method', '_uninformed','_coverage_new']
     scenario_combinations = list(product([1, 2, 3], repeat=4))  # 81 combinations
 
     # for it in range(n_iterations):
     i=1
+    # for it in [1]:
     for it in [2,5,6,8,9,12,13,15,16,17]:
         for scenario in scenario_combinations:
             for method in methods:
@@ -253,7 +254,8 @@ def load_comparison_results(base_path="Result_files/small/comparison/", n_iterat
                     "normalized_cost": (finalcost / ((399/100)*budget*robots)),
                     "runtime_sec": time_total
                 })
-
+                if finalinfo / totalinfo > 1:
+                    print("Warning! Normalized info surpasses 1 for ", it, scenario, method, " with result ", finalinfo/totalinfo)
     df = pd.DataFrame(all_data)
     return df
 
@@ -331,12 +333,13 @@ def analyze_results_new(test="comparison"):
                     print("") #whiteline between scenarios
     elif test == "comparison_small":
         analysis_options = {0:"avg",1:"scenario",2:"top"}
-        analysis = analysis_options[1]
+        analysis = analysis_options[0]
         print("Analysis style: ", analysis)
         df = load_comparison_results()
         # Average performance per method over all scenarios
         if analysis=="avg":
-            analysis_outcome = df.groupby('method')[['normalized_info', 'finalcost', 'runtime_sec']].describe()
+            # analysis_outcome = df.groupby('method')[['normalized_info', 'finalcost', 'runtime_sec']].describe()
+            analysis_outcome = df.groupby('method')[['normalized_info', 'normalized_cost']].describe()
             print(analysis_outcome)
 
         # Or by scenario configuration
@@ -355,6 +358,7 @@ def analyze_results_new(test="comparison"):
 
             # --- Run and append per-scenario ANOVA results ---
             analysis_outcome = add_per_scenario_anova(df, analysis_outcome)
+            # analysis_outcome = add_per_scenario_ttest(df, analysis_outcome)
 
 
             print(analysis_outcome.to_markdown(index=False))
@@ -429,8 +433,8 @@ def analyze_results_new(test="comparison"):
         # ---------- PLOTTING ----------
         sns.set(style="whitegrid")
         fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
-        y_metric = "normalized_info"
-        # y_metric = "normalized_cost"
+        # y_metric = "normalized_info"
+        y_metric = "normalized_cost"
         # y_metric = "time_total"
         for ax, budget_level in zip(axes, [10, 25]):
             df_budget = df[round(df["budget_percent"]) == budget_level] # filter by budget level
@@ -489,6 +493,28 @@ def analyze_results_new(test="comparison"):
         plt.tight_layout()
         plt.show()
 
+
+        # Test whether the jump from 2 to 5 robots provides a significant increase in information:
+        for budget in [10, 25]:
+            print(f"\n--- Budget: {budget}% ---")
+            for iteration in sorted(df["iterations"].unique()):
+                subset = df[(round(df["budget_percent"]) == budget) & (df["iterations"] == iteration)]
+                vals2 = subset[subset["robots"] == 2]["normalized_info"]
+                vals5 = subset[subset["robots"] == 5]["normalized_info"]
+
+                if len(vals2) > 1 and len(vals5) > 1:
+                    tstat, pval = ttest_ind(vals2, vals5, equal_var=False)
+                    print(f"Iter {iteration}: p = {pval:.4f}")
+
+        # verify increase at 200 iterations 25% budget from 2 to 5 robots
+        # Mean performance at 200 iterations, 25% budget
+        subset = df[(round(df["budget_percent"]) == 25) & (df["iterations"] == 200)]
+        mean2 = subset[subset["robots"] == 2]["normalized_info"].mean()
+        mean5 = subset[subset["robots"] == 5]["normalized_info"].mean()
+
+        increase_percent = 100 * (mean5 - mean2) / mean2
+        print(f"Normalized info ↑ from {mean2:.3f} to {mean5:.3f} → {increase_percent:.2f}% increase")
+
     # Reading out results of one case
     # rounds = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r5_it200_1/rounds.npy"))
     # path = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r5_it200_1/finalpath.npy"))
@@ -496,6 +522,51 @@ def analyze_results_new(test="comparison"):
     #     print(path[i],rounds[i])
     # time = np.load(str("Result_files/small/increasing_iterations/[1, 2, 2, 1]_method_b40_r2_it200_0/computingtime.npy"))
     # print("Time: ", time)
+
+from scipy.stats import ttest_ind
+import numpy as np
+import pandas as pd
+
+def add_per_scenario_ttest(df, scenario_df, scenario_columns=['robots', 'budget_percent', 'gaussians_nr', 'gaussians_size']):
+    """
+    Performs an independent two-sample t-test per scenario between 'method' and 'coverage_new'.
+    Appends results (p-value, significance) to scenario_df.
+    """
+    pvals = []
+    significance = []
+
+    for _, row in scenario_df.iterrows():
+        # Extract scenario values
+        scenario_values = {col: row[col] for col in scenario_columns}
+
+        # Subset data to the current scenario
+        mask = (df[scenario_columns] == pd.Series(scenario_values)).all(axis=1)
+        group = df[mask]
+
+        # Filter for only 'method' and 'coverage_new'
+        methods_of_interest = group[group['method'].isin(['method', 'coverage_new'])]
+
+        # Get samples for each
+        sample_method = methods_of_interest[methods_of_interest['method'] == 'method']['normalized_info']
+        sample_coverage = methods_of_interest[methods_of_interest['method'] == 'coverage_new']['normalized_info']
+
+        # Check both groups have samples
+        if len(sample_method) > 1 and len(sample_coverage) > 1:
+            try:
+                t_stat, p_val = ttest_ind(sample_method, sample_coverage, equal_var=True)  # Welch's t-test
+                pvals.append(p_val)
+                significance.append(p_val < 0.05)
+            except Exception:
+                pvals.append(np.nan)
+                significance.append(False)
+        else:
+            pvals.append(np.nan)
+            significance.append(False)
+
+    scenario_df['ttest_pvalue'] = pvals
+    scenario_df['significant'] = significance
+    return scenario_df
+
 
 from scipy.stats import f_oneway
 
@@ -555,7 +626,7 @@ def recompute_uninformed_finalinfo(base_path="Result_files/small/comparison", it
             if os.path.exists(scenario_basepath):
                 print(scenario_basepath)
                 uncertainty_path = os.path.join(scenario_basepath, 'uncertainty_matrix.npy')
-                uninformed_path = os.path.join(base_path, str(it), scenario_str + "_uninformed")
+                uninformed_path = os.path.join(base_path, str(it), scenario_str + "_coverage")
 
                 # Paths for existing files
                 infopath_file = os.path.join(uninformed_path, 'infopath.npy')
@@ -588,6 +659,6 @@ if __name__ == '__main__':
     #analyze_results()
     # visualize_results()
     #analyze_results_new()
-    #analyze_results_new("increasing_iterations_small")
-    analyze_results_new("comparison_small")
-    #recompute_uninformed_finalinfo(iterations=[2,5,8,12,16])
+    analyze_results_new("increasing_iterations_small")
+    # analyze_results_new("comparison_small")
+    # recompute_uninformed_finalinfo(iterations=[2,5,6,8,9,12,13,15,16,17])

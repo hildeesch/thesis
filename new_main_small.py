@@ -107,7 +107,8 @@ def prepandtest(test="comparison"):
     if test=="comparison":
         scenariolist = list(product([1, 2, 3], repeat=4))
         # for it in range(2,20):
-        for it in [2,5,6,8,9,12,13,15,16,17]:
+        # for it in [2,5,6,8,9,12,13,15,16,17]:
+        for it in range(18,28):
             pathname = str("Result_files/small/comparison/") + str(it) 
             if not os.path.exists(pathname):
                 os.makedirs(str("Result_files/small/comparison/") + str(it))
@@ -219,7 +220,7 @@ def prepandtest(test="comparison"):
                     
                 # Budgeted coverage
                 budget_matrix = deepcopy(uncertainty_matrix)
-                pathname = str("Result_files/small/comparison/")+str(it)+"/"+ str(scenario) + str("_coverage")+str("/")
+                pathname = str("Result_files/small/comparison/")+str(it)+"/"+ str(scenario) + str("_coverage_new")+str("/")
                 if not os.path.exists(pathname):
                     os.makedirs(pathname)
                     startpos=[50,40]
